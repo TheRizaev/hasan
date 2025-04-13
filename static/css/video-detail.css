@@ -1,0 +1,524 @@
+/* Специальные эффекты для страницы видео */
+.video-page-layout {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 25px;
+    padding: 1.5rem;
+    background-color: var(--dark-bg); /* Используем --dark-bg из :root вместо черного */
+}
+
+.video-content {
+    flex: 1;
+    min-width: 300px;
+    max-width: 1000px;
+    color: var(--text-light);
+}
+
+.related-videos {
+    width: 350px;
+    margin-top: 0;
+    display: block !important; /* Принудительно показываем блок */
+}
+
+.related-videos h3 {
+    color: white; /* Белый цвет для заголовка */
+    font-size: 1.3rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid rgba(159, 37, 88, 0.2);
+    position: relative;
+}
+
+.related-videos h3::after {
+    content: "🐰";
+    position: absolute;
+    font-size: 1.2rem;
+    right: 0;
+    top: 0;
+    animation: hop 1s infinite;
+}
+
+.related-videos-list {
+    display: flex !important;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.related-video-card {
+    display: flex;
+    cursor: pointer;
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.3s;
+    background-color: rgba(255, 255, 255, 0.7);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+}
+
+.dark-theme .related-video-card {
+    background-color: rgba(42, 18, 23, 0.7);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+}
+
+.related-video-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 20px rgba(159, 37, 88, 0.2);
+}
+
+.related-thumbnail {
+    position: relative;
+    width: 168px;
+    height: 94px;
+    flex-shrink: 0;
+}
+
+.related-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s;
+}
+
+.related-video-card:hover .related-thumbnail img {
+    transform: scale(1.1);
+}
+
+.related-info {
+    padding: 10px 15px;
+    flex-grow: 1;
+}
+
+.related-title {
+    font-weight: bold;
+    margin-bottom: 5px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 0.95rem;
+    line-height: 1.3;
+    color: white !important;
+}
+
+.related-channel {
+    font-size: 0.85rem;
+    color: var(--gray-color) !important;
+    margin-bottom: 3px;
+}
+
+.related-stats {
+    font-size: 0.75rem;
+    color: var(--gray-color);
+}
+
+/* Стилизация видеоплеера KRONIK */
+.video-player-container {
+    position: relative;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    margin-bottom: 25px;
+    background-color: var(--dark-bg);
+}
+
+.dark-theme .video-player-container {
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+}
+
+.video-details h1 {
+    font-size: 1.8rem;
+    margin-bottom: 15px;
+    color: white; /* Белый цвет для заголовка видео */
+    line-height: 1.3;
+}
+
+.video-info-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 0;
+    border-bottom: 2px solid rgba(159, 37, 88, 0.2);
+    margin-bottom: 20px;
+}
+
+.views-info {
+    font-size: 1.1rem;
+    color: var(--gray-color);
+}
+
+.actions-bar {
+    display: flex;
+    gap: 15px;
+}
+
+.action-button {
+    background: none;
+    border: none;
+    color: var(--gray-color);
+    cursor: pointer;
+    padding: 8px 15px;
+    border-radius: 25px;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 1rem;
+    background-color: rgba(159, 37, 88, 0.1);
+}
+
+.light-theme .action-button:hover {
+    background-color: rgba(159, 37, 88, 0.1);
+    color: var(--primary-color);
+}
+
+.dark-theme .action-button:hover {
+    background-color: rgba(159, 37, 88, 0.2);
+    color: var(--primary-color);
+}
+
+.action-button.active {
+    color: var(--primary-color);
+    font-weight: bold;
+}
+
+.channel-info {
+    display: flex;
+    align-items: center;
+    padding: 20px 0;
+    border-bottom: 2px solid rgba(159, 37, 88, 0.2);
+    margin-bottom: 25px;
+}
+
+.channel-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background-color: var(--accent-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    margin-right: 20px;
+    color: white;
+    position: relative;
+}
+
+.channel-details {
+    flex-grow: 1;
+}
+
+.channel-name {
+    font-size: 1.2rem;
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: white;
+}
+
+.subscribers {
+    font-size: 0.9rem;
+    color: var(--gray-color);
+}
+
+.subscribe-button {
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    padding: 10px 25px;
+    border-radius: 30px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 5px 15px rgba(159, 37, 88, 0.3);
+}
+
+.subscribe-button:hover {
+    background-color: #7d1e46;
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(159, 37, 88, 0.4);
+}
+
+.video-description {
+    line-height: 1.6;
+    margin-bottom: 30px;
+    padding: 15px;
+    background-color: rgba(159, 37, 88, 0.05);
+    border-radius: 12px;
+    border-left: 3px solid var(--primary-color);
+    color: var(--text-light);
+}
+
+/* Комментарии */
+.comments-section {
+    margin-top: 40px;
+}
+
+.comments-section h2 {
+    color: white;
+    font-size: 1.5rem;
+    margin-bottom: 25px;
+    position: relative;
+    display: inline-block;
+}
+
+.comments-section h2::after {
+    content: "";
+    position: absolute;
+    bottom: -10px;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background-color: var(--primary-color);
+    border-radius: 3px;
+}
+
+.comment-form {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 30px;
+}
+
+.user-avatar {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    background-color: var(--accent-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    margin-right: 20px;
+    color: white;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.comment-form input {
+    flex-grow: 1;
+    padding: 15px;
+    border: none;
+    border-bottom: 2px solid var(--gray-color);
+    background: transparent;
+    color: inherit;
+    outline: none;
+    font-size: 1rem;
+    transition: border-color 0.3s;
+}
+
+.comment-form input:focus {
+    border-color: var(--primary-color);
+}
+
+.comment {
+    display: flex;
+    margin-bottom: 25px;
+}
+
+.comment-avatar {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    background-color: var(--primary-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    margin-right: 20px;
+    color: white;
+    flex-shrink: 0;
+    position: relative;
+}
+
+/* Кроличьи ушки для аватаров комментариев */
+.comment-avatar::before,
+.comment-avatar::after {
+    content: "";
+    position: absolute;
+    background-color: var(--primary-color);
+    width: 12px;
+    height: 20px;
+    top: -15px;
+    border-radius: 50% 50% 0 0;
+}
+
+.comment-avatar::before {
+    left: 10px;
+    transform: rotate(-15deg);
+}
+
+.comment-avatar::after {
+    right: 10px;
+    transform: rotate(15deg);
+}
+
+.comment-content {
+    flex-grow: 1;
+}
+
+.comment-author {
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: white;
+}
+
+.comment-text {
+    margin-bottom: 10px;
+    line-height: 1.5;
+    color: var(--text-light);
+}
+
+.comment-meta {
+    color: var(--gray-color);
+    font-size: 0.85rem;
+    margin-bottom: 8px;
+}
+
+.comment-actions {
+    display: flex;
+    gap: 15px;
+    margin-top: 8px;
+}
+
+.comment-actions button {
+    background: none;
+    border: none;
+    color: var(--gray-color);
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 4px;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.9rem;
+}
+
+.comment-actions button:hover {
+    color: var(--primary-color);
+}
+
+.light-theme .comment-actions button:hover {
+    background-color: rgba(159, 37, 88, 0.1);
+}
+
+.dark-theme .comment-actions button:hover {
+    background-color: rgba(159, 37, 88, 0.2);
+}
+
+/* Клавиши быстрого доступа */
+.keyboard-shortcuts-info {
+    margin-top: 30px;
+    margin-bottom: 40px;
+}
+
+.shortcuts-toggle {
+    background: none;
+    border: 2px solid var(--primary-color);
+    padding: 8px 15px;
+    border-radius: 30px;
+    color: var(--primary-color);
+    cursor: pointer;
+    transition: all 0.3s;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.shortcuts-toggle:hover {
+    background-color: rgba(159, 37, 88, 0.1);
+    transform: translateY(-3px);
+}
+
+.shortcuts-panel {
+    margin-top: 15px;
+    padding: 20px;
+    border-radius: 15px;
+    background-color: rgba(159, 37, 88, 0.05);
+    border-left: 3px solid var(--primary-color);
+}
+
+.dark-theme .shortcuts-panel {
+    background-color: rgba(159, 37, 88, 0.1);
+}
+
+.shortcuts-panel h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: white;
+}
+
+.shortcuts-panel ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 12px;
+}
+
+.shortcuts-panel li {
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    color: var(--text-light);
+}
+
+.shortcuts-panel .key {
+    display: inline-block;
+    min-width: 25px;
+    padding: 5px 10px;
+    margin-right: 12px;
+    text-align: center;
+    background-color: var(--accent-color);
+    color: white;
+    border-radius: 6px;
+    font-weight: bold;
+    box-shadow: 0 2px 8px rgba(159, 37, 88, 0.3);
+}
+
+/* Стили для самого видеоплеера */
+.video-js {
+    background-color: var(--dark-bg) !important;
+}
+
+/* Адаптивность */
+@media (max-width: 1200px) {
+    .video-page-layout {
+        flex-direction: column;
+    }
+    
+    .related-videos {
+        width: 100%;
+    }
+    
+    .related-videos-list {
+        display: grid !important;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 15px;
+    }
+}
+
+@media (max-width: 768px) {
+    .video-info-bar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .actions-bar {
+        margin-top: 15px;
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    .channel-info {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .channel-avatar {
+        margin-bottom: 15px;
+    }
+    
+    .subscribe-button {
+        margin-top: 15px;
+    }
+}

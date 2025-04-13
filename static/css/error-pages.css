@@ -1,0 +1,170 @@
+/* Стили для страниц ошибок */
+.error-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: calc(100vh - 100px);
+    padding: 20px;
+    overflow: hidden;
+    position: relative;
+}
+
+.error-content {
+    max-width: 600px;
+    text-align: center;
+    background-color: rgba(159, 37, 88, 0.05);
+    padding: 40px;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(159, 37, 88, 0.2);
+    position: relative;
+    z-index: 1;
+    animation: fadeIn 1s ease;
+}
+
+.dark-theme .error-content {
+    background-color: rgba(42, 18, 23, 0.7);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.error-code {
+    font-size: 150px;
+    font-weight: 900;
+    color: var(--accent-color);
+    line-height: 1;
+    margin-bottom: 20px;
+    text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.1);
+    position: relative;
+    animation: pulseCode 4s infinite ease-in-out;
+}
+
+.error-bunny {
+    font-size: 72px;
+    position: absolute;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+    transition: transform 0.5s ease;
+}
+
+.error-bunny.hop {
+    animation: hop 0.5s ease;
+}
+
+.error-title {
+    font-size: 32px;
+    color: var(--primary-color);
+    margin-bottom: 15px;
+    text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.1);
+}
+
+.error-message {
+    font-size: 18px;
+    color: var(--gray-color);
+    margin-bottom: 30px;
+    line-height: 1.5;
+}
+
+.error-button {
+    display: inline-block;
+    padding: 12px 30px;
+    background-color: var(--accent-color);
+    color: white;
+    border-radius: 30px;
+    text-decoration: none;
+    font-weight: bold;
+    transition: all 0.3s;
+    box-shadow: 0 5px 15px rgba(159, 37, 88, 0.3);
+}
+
+.error-button:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(159, 37, 88, 0.4);
+    background-color: #7d1e46;
+}
+
+/* Background decoration */
+.error-container::before,
+.error-container::after {
+    content: "404";
+    position: absolute;
+    font-size: 300px;
+    color: rgba(159, 37, 88, 0.03);
+    z-index: 0;
+    font-weight: 900;
+    pointer-events: none;
+}
+
+.error-container::before {
+    top: -50px;
+    left: -100px;
+    transform: rotate(-15deg);
+}
+
+.error-container::after {
+    bottom: -100px;
+    right: -100px;
+    transform: rotate(10deg);
+}
+
+/* Animations */
+@keyframes fadeIn {
+    0% { opacity: 0; transform: translateY(30px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulseCode {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+@keyframes hop {
+    0% { transform: translateX(-50%) translateY(0); }
+    50% { transform: translateX(-50%) translateY(-20px); }
+    100% { transform: translateX(-50%) translateY(0); }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .error-code {
+        font-size: 120px;
+    }
+    
+    .error-bunny {
+        font-size: 50px;
+        top: 70px;
+    }
+    
+    .error-title {
+        font-size: 24px;
+    }
+    
+    .error-message {
+        font-size: 16px;
+    }
+    
+    .error-container::before,
+    .error-container::after {
+        font-size: 200px;
+    }
+}
+
+@media (max-width: 480px) {
+    .error-content {
+        padding: 30px 20px;
+    }
+    
+    .error-code {
+        font-size: 100px;
+    }
+    
+    .error-bunny {
+        font-size: 40px;
+        top: 60px;
+    }
+    
+    .error-container::before,
+    .error-container::after {
+        display: none;
+    }
+}

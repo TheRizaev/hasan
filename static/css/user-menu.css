@@ -1,0 +1,124 @@
+.user-menu {
+    position: relative;
+    cursor: pointer;
+    z-index: 101;
+}
+
+.avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background-color: var(--accent-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: var(--text-light);
+    box-shadow: 0 3px 8px rgba(159, 37, 88, 0.3);
+    transition: transform 0.3s;
+    position: relative;
+    overflow: hidden; /* Добавлено для обрезки изображения внутри */
+}
+
+/* Стили для изображения внутри аватара */
+.avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* Обеспечивает правильное масштабирование изображения */
+}
+
+.avatar:hover {
+    transform: scale(1.1);
+}
+
+.user-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    width: 280px;
+    background-color: var(--light-bg);
+    border-radius: 15px;
+    box-shadow: var(--bunny-shadow);
+    display: none;
+    overflow: hidden;
+    z-index: 1000;
+    animation: dropdownFadeIn 0.3s;
+    border: 1px solid rgba(159, 37, 88, 0.1);
+    margin-top: 15px;
+}
+
+@keyframes dropdownFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.dark-theme .user-dropdown {
+    background-color: var(--medium-bg);
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(159, 37, 88, 0.2);
+}
+
+.user-dropdown.show {
+    display: block;
+}
+
+.user-header {
+    padding: 1.2rem;
+    border-bottom: 1px solid rgba(159, 37, 88, 0.1);
+    display: flex;
+    align-items: center;
+}
+
+.user-header .avatar {
+    margin-right: 1rem;
+}
+
+.user-name {
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+.user-email {
+    font-size: 0.8rem;
+    color: var(--gray-color);
+}
+
+.dropdown-item {
+    padding: 0.9rem 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: all 0.3s;
+    border-left: 3px solid transparent;
+    color: inherit;
+}
+
+.light-theme .dropdown-item {
+    color: var(--text-dark);
+}
+
+.dark-theme .dropdown-item {
+    color: var(--text-light);
+}
+
+.dropdown-item:hover {
+    background-color: rgba(159, 37, 88, 0.1);
+    border-left-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.dark-theme .dropdown-item:hover {
+    background-color: rgba(159, 37, 88, 0.2);
+}
+
+.dropdown-item .icon {
+    margin-right: 0.75rem;
+    font-size: 1.2rem;
+    color: var(--primary-color);
+}

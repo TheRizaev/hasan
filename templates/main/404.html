@@ -1,0 +1,38 @@
+{% extends 'main/base.html' %}
+{% load static %}
+
+{% block title %}404 - KRONIK{% endblock %}
+
+{% block content %}
+<div class="error-container">
+    <div class="error-content">
+        <div class="error-code">404</div>
+        <div class="error-bunny">🐰</div>
+        <h1 class="error-title">Похоже, ты потерялся</h1>
+        <p class="error-message">Давай я отведу тебя туда, где мы все</p>
+        <a href="{% url 'index' %}" class="error-button">Вернуться на главную</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Анимация кролика
+    document.addEventListener('DOMContentLoaded', function() {
+        const bunny = document.querySelector('.error-bunny');
+        
+        // Начальная анимация появления
+        setTimeout(() => {
+            bunny.classList.add('hop');
+        }, 500);
+        
+        // Повторяющаяся анимация прыжков
+        setInterval(() => {
+            bunny.classList.remove('hop');
+            setTimeout(() => {
+                bunny.classList.add('hop');
+            }, 50);
+        }, 3000);
+    });
+</script>
+{% endblock %}

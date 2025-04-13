@@ -1,0 +1,64 @@
+
+{% extends 'main/base.html' %}
+{% load static %}
+
+{% block title %}Results - KRONIK{% endblock %}
+
+{% block content %}
+<div class="search-results-container">
+    <h1 class="search-heading">Результаты поиска: <span class="search-query">{{ query }}</span></h1>
+    
+    <div class="search-filter">
+        <div class="filter-item active">Все</div>
+        <div class="filter-item">Видео</div>
+        <div class="filter-item">Курсы</div>
+        <div class="filter-item">Каналы</div>
+    </div>
+    
+    <div class="search-results-list">
+        {% for video in videos %}
+        <div class="search-result-item" onclick="window.location.href = '/video/{{ video.user_id }}__{{ video.video_id }}/'">
+            <div class="result-thumbnail">
+                {% if video.thumbnail_url %}
+                    <img src="{{ video.thumbnail_url }}" alt="{{ video.title }}" loading="lazy" onerror="this.src='{% static 'placeholder.jpg' %}'">
+                {% else %}
+                    <img src="{% static 'placeholder.jpg' %}" alt="{{ video.title }}" loading="lazy">
+                {% endif %}
+                <div class="result-duration">{{ video.duration }}</div>
+            </div>
+            <div class="result-details">
+                <h3 class="result-title">{{ video.title }}</h3>
+                <div class="result-meta">{{ video.views_formatted }} • {{ video.upload_date_formatted|default:"Недавно" }}</div>
+                <div class="result-channel">
+                    <div class="channel-avatar">{{ video.display_name|first|default:video.channel|first }}</div>
+                    <div class="channel-name">{{ video.display_name|default:video.channel }}</div>
+                </div>
+                <div class="result-description">
+                    {{ video.description|truncatechars:150 }}
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="no-results">
+            <h3>По запросу "{{ query }}" ничего не найдено</h3>
+            <p>Попробуйте изменить запрос или выбрать другую категорию</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Настройка фильтров поиска
+        const filterItems = document.querySelectorAll('.filter-item');
+        
+        filterItems.forEach(item => {
+            item.addEventListener('click', function() {
+                filterItems.forEach(i => i.classList.remove('active'));
+                this.classList.add('active');
+                // Здесь может быть код для фильтрации результатов
+            });
+        });
+    });
+</script>
+{% endblock %}

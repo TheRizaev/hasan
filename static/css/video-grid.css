@@ -1,0 +1,253 @@
+.videos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.8rem;
+    padding: 1rem;
+    contain: layout style; /* Помогает браузеру оптимизировать рендеринг */
+}
+
+.video-card {
+    cursor: pointer;
+    border-radius: 15px;
+    overflow: hidden;
+    transition: transform 0.3s, box-shadow 0.3s;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeIn 0.5s forwards;
+    background-color: rgba(255, 255, 255, 0.7);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+    position: relative;
+    will-change: transform; /* Подсказка браузеру об анимации */
+    contain: content; /* Улучшает производительность */
+}
+
+.dark-theme .video-card {
+    background-color: rgba(11, 25, 29, 0.7);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+@keyframes fadeIn {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.video-card:hover {
+    transform: translateY(-10px) scale(1.02);
+    box-shadow: 0 10px 25px rgba(159, 37, 88, 0.2);
+}
+
+.dark-theme .video-card:hover {
+    box-shadow: 0 10px 25px rgba(159, 37, 88, 0.3);
+}
+
+.thumbnail {
+    width: 100%;
+    height: 160px;
+    background-color: var(--gray-color);
+    position: relative;
+    overflow: hidden;
+}
+
+.thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s;
+    contain: paint; /* Улучшает производительность рендеринга изображений */
+}
+
+.video-card:hover .thumbnail img {
+    transform: scale(1.1);
+}
+
+.duration {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    padding: 0.3rem 0.6rem;
+    background-color: rgba(159, 37, 88, 0.8);
+    color: white;
+    font-size: 0.8rem;
+    border-radius: 20px;
+    font-weight: bold;
+    backdrop-filter: blur(5px);
+    z-index: 1;
+}
+
+.video-info {
+    padding: 1rem;
+}
+
+.video-title {
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.4;
+    font-size: 1.05rem;
+    color: white; /* Названия видео белым цветом */
+    text-rendering: optimizeSpeed; /* Улучшает производительность */
+}
+
+.channel-name {
+    font-size: 0.9rem;
+    color: var(--gray-color); /* Цвет канала как у статистики */
+    margin-bottom: 0.3rem;
+    font-weight: normal; /* Не делаем имя канала жирным */
+    text-overflow: ellipsis; /* Добавляем многоточие для длинных имен */
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.video-stats {
+    font-size: 0.8rem;
+    color: var(--gray-color);
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* Обеспечиваем одинаковый цвет для статистики и названия канала */
+.video-card .video-stats,
+.video-card .channel-name {
+    font-size: 0.8rem;
+    color: var(--gray-color);
+}
+
+/* Исправление для темной темы */
+.dark-theme .video-card .video-title {
+    color: white;
+}
+
+.dark-theme .video-card .channel-name,
+.dark-theme .video-card .video-stats {
+    color: var(--gray-color);
+}
+
+/* Категории-таблетки */
+.category-filter {
+    display: flex;
+    gap: 0.8rem;
+    overflow-x: auto;
+    padding: 0.8rem 0;
+    margin-bottom: 1rem;
+    scrollbar-width: thin;
+    scroll-behavior: smooth; /* Плавная прокрутка */
+    -webkit-overflow-scrolling: touch; /* Улучшает прокрутку на iOS */
+}
+
+.category-filter::-webkit-scrollbar {
+    height: 5px;
+}
+
+.category-filter::-webkit-scrollbar-track {
+    background: rgba(159, 37, 88, 0.05);
+}
+
+.category-filter::-webkit-scrollbar-thumb {
+    background: var(--accent-color);
+    border-radius: 5px;
+}
+
+.category-chip {
+    padding: 0.6rem 1.5rem;
+    background-color: rgba(159, 37, 88, 0.1);
+    color: var(--text-light);
+    border-radius: 30px;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-weight: 600;
+    border: 2px solid transparent;
+    user-select: none; /* Предотвращает выделение текста */
+}
+
+.dark-theme .category-chip {
+    color: var(--text-light);
+    background-color: rgba(159, 37, 88, 0.2);
+}
+
+.category-chip:hover {
+    background-color: rgba(159, 37, 88, 0.2);
+    transform: translateY(-3px);
+}
+
+.dark-theme .category-chip:hover {
+    background-color: rgba(159, 37, 88, 0.3);
+}
+
+.category-chip.active {
+    background-color: var(--accent-color);
+    color: white;
+    font-weight: bold;
+    box-shadow: 0 5px 15px rgba(159, 37, 88, 0.3);
+}
+
+/* Спиннер загрузки с оптимизацией */
+.loading-spinner {
+    display: flex;
+    justify-content: center;
+    padding: 2rem;
+    color: var(--primary-color);
+    font-size: 2rem;
+    animation: spin 1s infinite linear;
+    contain: strict; /* Максимальное ограничение для улучшения производительности */
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Оптимизация для мобильных устройств */
+@media (max-width: 1200px) {
+    .videos-grid {
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        contain: content;
+    }
+}
+
+@media (max-width: 768px) {
+    .videos-grid {
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 1rem;
+    }
+    
+    .category-filter {
+        padding: 0.5rem 0;
+        gap: 0.5rem;
+        overflow-x: auto;
+    }
+    
+    .category-chip {
+        padding: 0.5rem 1rem;
+        font-size: 0.85rem;
+    }
+    
+    .video-title {
+        font-size: 0.95rem;
+        -webkit-line-clamp: 2;
+    }
+    
+    .thumbnail {
+        height: 140px; /* Уменьшаем высоту для более быстрой загрузки на мобильных */
+    }
+}
+
+@media (max-width: 480px) {
+    .videos-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .thumbnail {
+        height: 180px;
+    }
+}

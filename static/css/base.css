@@ -1,0 +1,151 @@
+/* Base styles and variables */
+:root {
+    --primary-color: #9f2558; /* Основной цвет кролика KRONIK - насыщенный розовый */
+    --secondary-color: #ffb0c9; /* Светло-розовый цвет для акцентов */
+    --dark-bg: #010e11; /* Тёмный фон */
+    --medium-bg: #07181f; /* Промежуточный темный фон */
+    --light-bg: #fff8fa; /* Светлый фон с розовым оттенком */
+    --accent-color: #9f2558; /* Акцентный цвет для кнопок и важных элементов */
+    --text-light: #fff8fa; /* Цвет текста на темном фоне */
+    --text-dark: #110108; /* Цвет текста на светлом фоне */
+    --gray-color: #7a6563; /* Приглушенный коричневато-серый */
+    --bunny-shadow: 0 8px 32px rgba(159, 37, 88, 0.2); /* Тень в стиле KRONIK */
+}
+
+/* Основные стили */
+body {
+    margin: 0;
+    font-family: 'Nunito', 'Segoe UI', Arial, sans-serif;
+    transition: background-color 0.3s, color 0.3s;
+    overflow-x: hidden;
+    background-position: center;
+    background-size: cover;
+    background-attachment: fixed;
+}
+
+body.light-theme {
+    background-color: var(--light-bg);
+    color: var(--text-dark);
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100" fill-opacity="0.03"><path d="M30,30 Q45,5 60,30 L60,60 Q45,85 30,60 Z" fill="%239f2558"/></svg>');
+}
+
+body.dark-theme {
+    background-color: var(--dark-bg);
+    color: var(--text-light);
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100" fill-opacity="0.05"><path d="M30,30 Q45,5 60,30 L60,60 Q45,85 30,60 Z" fill="%239f2558"/></svg>');
+}
+
+/* Кроличьи уши на скроллбаре */
+::-webkit-scrollbar {
+    width: 14px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(159, 37, 88, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--accent-color);
+    border-radius: 15px;
+    border: 3px solid var(--dark-bg);
+}
+
+.light-theme ::-webkit-scrollbar-thumb {
+    border-color: var(--light-bg);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #7d1e46;
+}
+
+/* Theme Transition Animation */
+.theme-transition {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 9999;
+    pointer-events: none;
+    clip-path: circle(0% at top right);
+    transition: clip-path 1s ease-in-out;
+}
+
+.theme-transition.animating {
+    clip-path: circle(150% at top right);
+}
+
+.theme-transition.light {
+    background-color: var(--light-bg);
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100" fill-opacity="0.03"><path d="M30,30 Q45,5 60,30 L60,60 Q45,85 30,60 Z" fill="%239f2558"/></svg>');
+}
+
+.theme-transition.dark {
+    background-color: var(--dark-bg);
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100" fill-opacity="0.05"><path d="M30,30 Q45,5 60,30 L60,60 Q45,85 30,60 Z" fill="%239f2558"/></svg>');
+}
+
+/* Анимации */
+@keyframes hop {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+@keyframes floating {
+    0%, 100% { transform: translateY(0) rotate(0); }
+    50% { transform: translateY(-10px) rotate(5deg); }
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+/* Дополнительные кроличьи элементы */
+.bunny-icon {
+    font-size: 1.2em;
+    animation: hop 1s infinite;
+    display: inline-block;
+    margin-left: 5px;
+}
+
+.bunny-paw-cursor {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="15" cy="15" r="10" fill="%239f2558" fill-opacity="0.5"/></svg>') 16 16, auto;
+}
+
+/* Глобальные стили кнопок */
+.btn {
+    padding: 0.8rem 1.5rem;
+    border-radius: 30px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+    border: none;
+    font-size: 1rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-primary {
+    background-color: var(--accent-color);
+    color: white;
+    box-shadow: 0 5px 15px rgba(159, 37, 88, 0.3);
+}
+
+.btn-primary:hover {
+    background-color: #7d1e46;
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(159, 37, 88, 0.4);
+}
+
+.btn-secondary {
+    background-color: rgba(159, 37, 88, 0.1);
+    color: var(--primary-color);
+    border: 2px solid var(--primary-color);
+}
+
+.btn-secondary:hover {
+    background-color: rgba(159, 37, 88, 0.2);
+    transform: translateY(-3px);
+}

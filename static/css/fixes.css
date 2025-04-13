@@ -1,0 +1,184 @@
+/* Общие исправления для макета */
+
+/* Убедимся, что основной контейнер страницы видео использует правильные цвета */
+.content {
+    margin-left: 240px; /* Ширина сайдбара */
+    padding: 1rem 2rem;
+    transition: margin-left 0.3s ease;
+    width: calc(100% - 240px);
+}
+
+/* Исправление для видимости блоков на странице видео */
+.video-page-layout > * {
+    display: block !important;
+}
+
+/* Фиксация рекомендованных видео для мобильных устройств */
+@media (max-width: 1200px) {
+    .related-videos {
+        width: 100%;
+    }
+    
+    .related-videos-list {
+        display: grid !important;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 15px;
+    }
+}
+
+/* Фиксация для модальных окон видеоплеера */
+.vjs-resume-overlay,
+.vjs-next-overlay {
+    z-index: 50 !important;
+    display: flex !important;
+}
+
+/* Улучшение видимости заголовков */
+.video-details h1 {
+    color: white !important; /* Принудительно белый цвет для заголовка видео */
+    font-size: 1.8rem;
+    line-height: 1.4;
+    margin-bottom: 20px;
+}
+
+/* Исправление для элементов управления видеоплеера */
+.vjs-control-bar {
+    background-color: rgba(17, 1, 8, 0.8) !important;
+}
+
+/* Исправляем выравнивание для sidebar если он конфликтует с содержимым */
+.main-container {
+    align-items: flex-start;
+}
+
+/* Исправления для рекомендованных видео */
+.related-title {
+    color: white !important;
+}
+
+.related-channel {
+    color: var(--gray-color) !important;
+}
+
+/* Исправления для кнопок действий */
+.action-button {
+    background-color: rgba(159, 37, 88, 0.1);
+    border-radius: 20px;
+    padding: 8px 15px;
+}
+
+.action-button:hover {
+    background-color: rgba(159, 37, 88, 0.2);
+}
+
+/* Исправления для светлой темы в video-grid */
+.light-theme .videos-grid .video-card .video-title {
+    color: var(--text-dark) !important; /* Принудительно используем темный цвет текста */
+}
+
+.light-theme .videos-grid {
+    background-color: var(--light-bg);
+}
+
+.light-theme .content {
+    background-color: var(--light-bg);
+    color: var(--text-dark);
+}
+
+/* Исправления для video-page-layout при светлой теме */
+.light-theme .video-page-layout {
+    background-color: var(--light-bg);
+}
+
+.light-theme .video-details h1,
+.light-theme .channel-name,
+.light-theme .comments-section h2,
+.light-theme .comment-author,
+.light-theme .related-title {
+    color: var(--text-dark) !important;
+}
+
+.light-theme .video-description,
+.light-theme .comment-text {
+    color: var(--text-dark);
+}
+
+/* Исправления для стилей категорий */
+.expertise-areas-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+    padding: 15px;
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.05);
+    max-height: 300px; /* Увеличиваем для лучшего отображения */
+    overflow-y: auto;
+    border: 2px solid rgba(159, 37, 88, 0.2);
+}
+
+.expertise-areas-container label {
+    display: flex;
+    align-items: center;
+    font-weight: normal;
+    margin-bottom: 5px;
+    cursor: pointer;
+    transition: color 0.3s;
+    padding: 5px 0;
+}
+
+.expertise-areas-container label:hover {
+    color: var(--accent-color);
+}
+
+.expertise-areas-container input[type="checkbox"] {
+    margin-right: 8px;
+    width: auto !important;
+    height: auto !important;
+    cursor: pointer;
+    opacity: 1 !important;
+    position: relative !important;
+}
+
+/* Исправления для drag and drop области загрузки файлов */
+.file-input-container {
+    position: relative;
+    padding: 40px 30px;
+    border: 2px dashed rgba(159, 37, 88, 0.3);
+    border-radius: 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    background-color: rgba(159, 37, 88, 0.05);
+}
+
+.file-input-container:hover,
+.file-input-container.highlight {
+    border-color: var(--accent-color);
+    background-color: rgba(159, 37, 88, 0.1);
+    box-shadow: 0 0 0 3px rgba(159, 37, 88, 0.1);
+}
+
+/* Исправления для видеоплеера */
+.video-js {
+    background-color: #000 !important;
+}
+
+.light-theme .video-js {
+    color: #000;
+}
+
+@media (max-width: 768px) {
+    .content {
+        margin-left: 0;
+        width: 100%;
+    }
+    
+    .sidebar {
+        left: -250px; /* Скрываем сайдбар за пределы экрана */
+    }
+    
+    .sidebar.show {
+        left: 0;
+    }
+}

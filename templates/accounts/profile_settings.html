@@ -1,0 +1,185 @@
+{% extends 'main/base.html' %}
+{% load static %}
+
+{% block title %}Настройки профиля - KRONIK{% endblock %}
+
+{% block content %}
+<div class="profile-container">
+    <div class="profile-header">
+        <div class="profile-avatar">
+            {% if gcs_profile.avatar_url %}
+                <img src="{{ gcs_profile.avatar_url }}" alt="{{ user.profile.display_name|default:user.username }}">
+            {% else %}
+                <div class="avatar-placeholder">
+                    {% if user.profile.display_name %}
+                        {{ user.profile.display_name|first }}
+                    {% else %}
+                        {{ user.username|first }}
+                    {% endif %}
+                </div>
+            {% endif %}
+            <!-- Avatar upload interface will be added by JavaScript -->
+        </div>
+        <div class="profile-info">
+            <h2>{{ user.profile.display_name|default:user.username }}</h2>
+            <p class="profile-username">{{ user.username }}</p>
+            <p class="profile-email">{{ user.email }}</p>
+            <p class="profile-date">Зарегистрирован: {{ user.profile.date_joined|date:"d.m.Y" }}</p>
+        </div>
+    </div>
+    
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+    
+    <div class="profile-content">
+        <div class="profile-section">
+            <h3>Настройки профиля</h3>
+            
+            <form method="POST" enctype="multipart/form-data" class="profile-form">
+                {% csrf_token %}
+                
+                <!-- Hidden field for avatar upload -->
+                <div style="display:none;">
+                    {{ form.profile_picture }}
+                </div>
+                
+                <div class="form-group">
+                    <label for="id_display_name">Отображаемое имя</label>
+                    {{ form.display_name }}
+                    {% if form.display_name.errors %}
+                        <div class="form-error">{{ form.display_name.errors }}</div>
+                    {% endif %}
+                    <small class="form-help">Это имя будет отображаться в вашем профиле и комментариях</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="id_bio">О себе</label>
+                    {{ form.bio }}
+                    {% if form.bio.errors %}
+                        <div class="form-error">{{ form.bio.errors }}</div>
+                    {% endif %}
+                    <small class="form-help">Расскажите о себе, своих интересах и опыте</small>
+                </div>
+                
+                <button type="submit" class="profile-save-button">Сохранить изменения</button>
+            </form>
+        </div>
+        
+        <div class="profile-section">
+            <h3>Настройки аккаунта</h3>
+            
+            <div class="account-settings">
+                <div class="account-setting-item">
+                    <div class="setting-info">
+                        <h4>Электронная почта</h4>
+                        <p>{{ user.email }}</p>
+                    </div>
+                    <button class="setting-action-btn change-email-btn">Изменить</button>
+                </div>
+                
+                <div class="account-setting-item">
+                    <div class="setting-info">
+                        <h4>Пароль</h4>
+                        <p>●●●●●●●●</p>
+                    </div>
+                    <button class="setting-action-btn change-password-btn">Изменить</button>
+                </div>
+                
+                <div class="account-setting-item">
+                    <div class="setting-info">
+                        <h4>Настройки уведомлений</h4>
+                        <p>Управление уведомлениями по электронной почте</p>
+                    </div>
+                    <button class="setting-action-btn notification-settings-btn">Настроить</button>
+                </div>
+                
+                <div class="account-setting-item danger-zone">
+                    <div class="setting-info">
+                        <h4>Удаление аккаунта</h4>
+                        <p>Удалить свой аккаунт и все данные</p>
+                    </div>
+                    <button class="setting-action-btn delete-account-btn">Удалить аккаунт</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="profile-section">
+            <h3>Настройки приватности</h3>
+            
+            <div class="privacy-settings">
+                <div class="privacy-setting-item">
+                    <div class="setting-info">
+                        <h4>Видимость профиля</h4>
+                        <p>Кто может видеть ваш профиль</p>
+                    </div>
+                    <select class="privacy-select" id="profile-visibility">
+                        <option value="public">Все</option>
+                        <option value="registered">Только зарегистрированные пользователи</option>
+                        <option value="private">Только я</option>
+                    </select>
+                </div>
+                
+                <div class="privacy-setting-item">
+                    <div class="setting-info">
+                        <h4>История просмотров</h4>
+                        <p>Сохранять историю просмотров видео</p>
+                    </div>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="watch-history" class="toggle-input" checked>
+                        <label for="watch-history" class="toggle-label"></label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Include the profile-enhancements.js script -->
+<script src="{% static 'js/profile-enhancements.js' %}"></script>
+
+<script>
+    // Placeholder for demo functionality in settings
+    document.addEventListener('DOMContentLoaded', function() {
+        // Handlers for setting buttons - just show message
+        const settingButtons = document.querySelectorAll('.setting-action-btn:not(.delete-account-btn)');
+        settingButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                alert('Эта функция будет доступна в ближайшем обновлении');
+            });
+        });
+        
+        // Handler for delete account button
+        const deleteAccountBtn = document.querySelector('.delete-account-btn');
+        if (deleteAccountBtn) {
+            deleteAccountBtn.addEventListener('click', function() {
+                if (confirm('Вы действительно хотите удалить свой аккаунт? Это действие нельзя отменить!')) {
+                    alert('Действие отменено. В реальной версии здесь будет процесс удаления аккаунта.');
+                }
+            });
+        }
+        
+        // Handler for saving privacy settings
+        const privacySelect = document.getElementById('profile-visibility');
+        const watchHistoryToggle = document.getElementById('watch-history');
+        
+        if (privacySelect) {
+            privacySelect.addEventListener('change', function() {
+                // In a real app there would be an AJAX request to save settings
+                console.log('Profile visibility changed:', this.value);
+            });
+        }
+        
+        if (watchHistoryToggle) {
+            watchHistoryToggle.addEventListener('change', function() {
+                // In a real app there would be an AJAX request to save settings
+                console.log('Watch history:', this.checked ? 'enabled' : 'disabled');
+            });
+        }
+    });
+</script>
+{% endblock %}

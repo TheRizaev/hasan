@@ -1,0 +1,213 @@
+{% extends 'main/base.html' %}
+{% load static %}
+
+{% block title %}Become Author - KRONIK{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-form-container author-container">
+        <h2 class="auth-title">Стать автором <span class="bunny-icon"><img src="/static/icons/bunny.svg" alt="Dark mode" width="32" height="32"></span></h2>
+        
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+        
+        <div class="author-info-text">
+            <p>Добро пожаловать в семью KRONIK! Авторы нашей образовательной платформы делятся знаниями 
+            через качественный видеоконтент и помогают пользователям развиваться. 
+            Присоединяйтесь к нашему сообществу!</p>
+        </div>
+        
+        <div class="author-benefits">
+            <div class="benefit-item">
+                <div class="benefit-icon">💰</div>
+                <div class="benefit-text">
+                    <h4>Монетизация</h4>
+                    <p>Получайте вознаграждение за свой образовательный контент</p>
+                </div>
+            </div>
+            <div class="benefit-item">
+                <div class="benefit-icon">🏆</div>
+                <div class="benefit-text">
+                    <h4>Признание</h4>
+                    <p>Станьте экспертом в своей области и получите признание</p>
+                </div>
+            </div>
+            <div class="benefit-item">
+                <div class="benefit-icon">🚀</div>
+                <div class="benefit-text">
+                    <h4>Рост</h4>
+                    <p>Развивайте свои навыки и получайте поддержку команды KRONIK</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="application-steps">
+            <div class="step active">
+                <div class="step-number">1</div>
+                <div class="step-text">Заполнение формы</div>
+            </div>
+            <div class="step-connector"></div>
+            <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-text">Рассмотрение заявки</div>
+            </div>
+            <div class="step-connector"></div>
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-text">Получение статуса автора</div>
+            </div>
+        </div>
+        
+        <form method="POST" class="auth-form" id="author-application-form">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label for="id_credentials">Образование и опыт <span class="required">*</span></label>
+                {{ form.credentials }}
+                {% if form.credentials.errors %}
+                    <div class="form-error">{{ form.credentials.errors }}</div>
+                {% endif %}
+                <small class="form-help">Расскажите о вашем образовании, опыте, достижениях и почему вы хотите стать автором.</small>
+            </div>
+            
+            <div class="form-group">
+                <label>Выберите области экспертизы <span class="required">*</span></label>
+                <div class="expertise-areas-container">
+                    {% for choice in form.expertise_areas %}
+                        <label>
+                            {{ choice.tag }}
+                            {{ choice.choice_label }}
+                        </label>
+                    {% endfor %}
+                </div>
+                {% if form.expertise_areas.errors %}
+                    <div class="form-error">{{ form.expertise_areas.errors }}</div>
+                {% endif %}
+                <small class="form-help">Выберите одну или несколько областей, в которых вы являетесь экспертом.</small>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit" class="auth-button">Отправить заявку</button>
+                <a href="{% url 'profile' %}" class="cancel-button">Отмена</a>
+            </div>
+        </form>
+        
+        <div class="auth-note">
+            <p><strong>Примечание:</strong> После отправки заявки наша команда рассмотрит ее в течение 2-3 рабочих дней и свяжется с вами по email.</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('author-application-form');
+        const credentialsField = document.getElementById('id_credentials');
+        
+        // Улучшенная валидация формы
+        form.addEventListener('submit', function(e) {
+            let isValid = true;
+            
+            // Проверка заполнения поля credentials
+            if (!credentialsField.value.trim()) {
+                isValid = false;
+                credentialsField.style.borderColor = '#ff4757';
+                
+                // Проверяем, есть ли уже сообщение об ошибке
+                let errorDiv = credentialsField.nextElementSibling;
+                if (!errorDiv || !errorDiv.classList.contains('form-error')) {
+                    errorDiv = document.createElement('div');
+                    errorDiv.className = 'form-error';
+                    errorDiv.textContent = 'Это поле обязательно для заполнения';
+                    credentialsField.parentNode.insertBefore(errorDiv, credentialsField.nextSibling);
+                }
+            } else {
+                credentialsField.style.borderColor = '';
+                let errorDiv = credentialsField.nextElementSibling;
+                if (errorDiv && errorDiv.classList.contains('form-error')) {
+                    errorDiv.remove();
+                }
+            }
+            
+            // Проверка выбора хотя бы одной области экспертизы
+            const checkboxes = document.querySelectorAll('input[name="expertise_areas"]');
+            let atLeastOneChecked = false;
+            
+            checkboxes.forEach(checkbox => {
+                if (checkbox.checked) {
+                    atLeastOneChecked = true;
+                }
+            });
+            
+            const expertiseContainer = document.querySelector('.expertise-areas-container');
+            
+            if (!atLeastOneChecked) {
+                isValid = false;
+                expertiseContainer.style.borderColor = '#ff4757';
+                
+                // Проверяем, есть ли уже сообщение об ошибке
+                let errorDiv = expertiseContainer.nextElementSibling;
+                if (!errorDiv || !errorDiv.classList.contains('form-error')) {
+                    errorDiv = document.createElement('div');
+                    errorDiv.className = 'form-error';
+                    errorDiv.textContent = 'Выберите хотя бы одну область экспертизы';
+                    expertiseContainer.parentNode.insertBefore(errorDiv, expertiseContainer.nextSibling);
+                }
+            } else {
+                expertiseContainer.style.borderColor = '';
+                let errorDiv = expertiseContainer.nextElementSibling;
+                if (errorDiv && errorDiv.classList.contains('form-error')) {
+                    errorDiv.remove();
+                }
+            }
+            
+            if (!isValid) {
+                e.preventDefault();
+            }
+        });
+        
+        // Очистка ошибок при вводе
+        credentialsField.addEventListener('input', function() {
+            this.style.borderColor = '';
+            const errorDiv = this.nextElementSibling;
+            if (errorDiv && errorDiv.classList.contains('form-error')) {
+                errorDiv.remove();
+            }
+        });
+        
+        // Очистка ошибок при выборе областей экспертизы
+        const checkboxes = document.querySelectorAll('input[name="expertise_areas"]');
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                // Проверяем, выбран ли хотя бы один чекбокс
+                let anyChecked = false;
+                checkboxes.forEach(cb => {
+                    if (cb.checked) anyChecked = true;
+                });
+                
+                if (anyChecked) {
+                    const expertiseContainer = document.querySelector('.expertise-areas-container');
+                    expertiseContainer.style.borderColor = '';
+                    const errorDiv = expertiseContainer.nextElementSibling;
+                    if (errorDiv && errorDiv.classList.contains('form-error')) {
+                        errorDiv.remove();
+                    }
+                }
+            });
+        });
+        
+        // Делаем чекбоксы более заметными
+        document.querySelectorAll('.expertise-areas-container input[type="checkbox"]').forEach(checkbox => {
+            checkbox.style.opacity = '1';
+            checkbox.style.position = 'relative';
+            checkbox.style.width = 'auto';
+            checkbox.style.height = 'auto';
+            checkbox.style.margin = '0 8px 0 0';
+        });
+    });
+</script>
+{% endblock %}

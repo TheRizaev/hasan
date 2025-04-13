@@ -1,0 +1,41 @@
+/* Main CSS file that imports all modular CSS files */
+
+/* Base variables and styles */
+@import url('base.css');
+
+/* Header and navigation */
+@import url('header.css');
+
+/* Search functionality */
+@import url('search.css');
+
+/* User menu */
+@import url('user-menu.css');
+
+/* Sidebar */
+@import url('sidebar.css');
+
+/* Video grid */
+@import url('video-grid.css');
+
+/* Video detail page */
+@import url('video-detail.css');
+
+/* Video player */
+/* @import url('video-player.css'); */
+@import url('kronik-player.css');
+
+/* Video components (player overlays, comments, shortcuts panel) */
+@import url('video-components.css');
+
+/* Author application page */
+@import url('author-application.css');
+
+
+/* Studio */
+@import url('studio.css');
+
+/* Responsive styles */
+@import url('responsive.css');
+
+/* Auth styles are imported directly in the base.html template */

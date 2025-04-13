@@ -1,0 +1,73 @@
+{% extends 'main/base.html' %}
+{% load static %}
+
+{% block title %}Вход - KRONIK{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-form-container">
+        <h2 class="auth-title">Вход в аккаунт</h2>
+        
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+        
+        <form method="POST" class="auth-form">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label for="id_username">Имя пользователя</label>
+                <div class="username-field-wrapper">
+                    <span class="username-prefix">@</span>
+                    {{ form.username }}
+                </div>
+                {% if form.username.errors %}
+                    <div class="form-error">{{ form.username.errors }}</div>
+                {% endif %}
+                <small class="form-help">Введите имя пользователя без @</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="id_password">Пароль</label>
+                {{ form.password }}
+                {% if form.password.errors %}
+                    <div class="form-error">{{ form.password.errors }}</div>
+                {% endif %}
+            </div>
+            
+            <button type="submit" class="auth-button">Войти</button>
+        </form>
+        
+        <div class="auth-links">
+            <p>Еще нет аккаунта? <a href="{% url 'register' %}">Зарегистрироваться</a></p>
+        </div>
+    </div>
+</div>
+
+<style>
+.username-field-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.username-prefix {
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 16px;
+    color: var(--primary-color);
+    font-weight: bold;
+    z-index: 2;
+}
+
+#id_username {
+    padding-left: 30px !important;
+}
+</style>
+{% endblock %}

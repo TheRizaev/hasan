@@ -1,0 +1,142 @@
+{% extends 'main/base.html' %}
+{% load static %}
+
+{% block title %}Profile - KRONIK{% endblock %}
+
+{% block content %}
+<div class="profile-container">
+    <div class="profile-header">
+        <div class="profile-avatar">
+            {% if gcs_profile.avatar_url %}
+                <img src="{{ gcs_profile.avatar_url }}" alt="{{ user.profile.display_name|default:user.username }}">
+            {% else %}
+                <div class="avatar-placeholder">
+                    {% if user.profile.display_name %}
+                        {{ user.profile.display_name|first }}
+                    {% else %}
+                        {{ user.username|first }}
+                    {% endif %}
+                </div>
+            {% endif %}
+            <!-- Removed avatar upload interface, it should only appear on the settings page -->
+        </div>
+        <div class="profile-info">
+            <h2>{{ user.profile.display_name|default:user.username }}</h2>
+            <p class="profile-username">{{ user.username }}</p>
+            <p class="profile-email">{{ user.email }}</p>
+            <p class="profile-date">Registered: {{ user.profile.date_joined|date:"d.m.Y" }}</p>
+            
+            {% if gcs_profile.stats %}
+            <div class="profile-stats">
+                <p>Videos: {{ gcs_profile.stats.videos_count|default:"0" }}</p>
+                <p>Total views: {{ gcs_profile.stats.total_views|default:"0" }}</p>
+            </div>
+            {% endif %}
+            
+            <a href="{% url 'profile_settings' %}" class="btn btn-secondary">Edit Profile</a>
+        </div>
+    </div>
+    
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+    
+    <div class="profile-content">
+        <!-- Bio section -->
+        {% if gcs_profile.bio %}
+        <div class="profile-section">
+            <h3>About</h3>
+            <div class="profile-bio">
+                {{ gcs_profile.bio|linebreaks }}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if user.profile.is_author %}
+        <div class="profile-section">
+            <h3>Author Statistics</h3>
+            
+            <div class="author-stats">
+                {% if gcs_profile.stats %}
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">📹</div>
+                        <div class="stat-value">{{ gcs_profile.stats.videos_count|default:"0" }}</div>
+                        <div class="stat-label">Videos</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">👁️</div>
+                        <div class="stat-value">{{ gcs_profile.stats.total_views|default:"0" }}</div>
+                        <div class="stat-label">Total Views</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">💾</div>
+                        <div class="stat-value">{{ gcs_profile.total_size_mb|default:"0" }} MB</div>
+                        <div class="stat-label">Storage Used</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">📅</div>
+                        <div class="stat-value">{{ user.profile.date_joined|timesince }}</div>
+                        <div class="stat-label">Member For</div>
+                    </div>
+                </div>
+                {% else %}
+                <p class="no-stats">No author statistics available yet.</p>
+                <a href="{% url 'studio' %}" class="btn btn-primary">Go to Studio</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <div class="profile-section">
+            <h3>Recent Activity</h3>
+            <div class="profile-activity">
+                {% if gcs_profile and gcs_profile.stats.videos_count > 0 %}
+                <p>You've uploaded {{ gcs_profile.stats.videos_count }} video{% if gcs_profile.stats.videos_count != 1 %}s{% endif %}.</p>
+                <a href="{% url 'studio' %}" class="btn btn-secondary">View Your Videos</a>
+                {% else %}
+                <p>No recent activity. Start by uploading videos or engaging with content!</p>
+                {% if user.profile.is_author %}
+                <a href="{% url 'studio' %}" class="btn btn-primary">Upload a Video</a>
+                {% else %}
+                <a href="{% url 'become_author' %}" class="btn btn-primary">Become an Author</a>
+                {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Still include profile-enhancements.js for other profile functionality, but we'll modify it -->
+<script src="{% static 'js/profile-enhancements.js' %}"></script>
+<script>
+    // Override the initProfileImageHandling function to do nothing on the profile page
+    document.addEventListener('DOMContentLoaded', function() {
+        // Replace the original function with an empty one
+        window.initProfileImageHandling = function() {
+            // Do nothing - avatar editing is disabled on the profile page
+        };
+    });
+</script>
+
+<style>
+/* Additional style for the bio section */
+.profile-bio {
+    line-height: 1.6;
+    color: inherit;
+    white-space: pre-line;
+}
+
+.dark-theme .profile-bio {
+    color: var(--text-light);
+}
+
+.light-theme .profile-bio {
+    color: var(--text-dark);
+}
+</style>
+{% endblock %}

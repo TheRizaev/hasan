@@ -1,0 +1,122 @@
+{% extends 'main/base.html' %}
+{% load static %}
+
+{% block title %}Email Verification - KRONIK{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-form-container">
+        <h2 class="auth-title">Email Verification</h2>
+        
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+        
+        <div class="verification-info">
+            <p>We've sent a 6-digit verification code to <strong>{{ email }}</strong>. Please enter it below to complete your verification.</p>
+            <p>If you don't see the email in your inbox, please check your spam folder.</p>
+        </div>
+        
+        <form method="POST" class="auth-form">
+            {% csrf_token %}
+            
+            <div class="form-group verification-code-group">
+                <label for="id_verification_code">Verification Code <span class="required">*</span></label>
+                {{ form.verification_code }}
+                {% if form.verification_code.errors %}
+                    <div class="form-error">{{ form.verification_code.errors }}</div>
+                {% endif %}
+                <div class="form-help">{{ form.verification_code.help_text }}</div>
+            </div>
+            
+            <button type="submit" class="auth-button">Verify Email</button>
+        </form>
+        
+        <div class="auth-links">
+            <p>Didn't receive the code? <a href="?resend=true" class="resend-code-link">Resend code</a></p>
+        </div>
+    </div>
+</div>
+
+<style>
+    .verification-info {
+        background-color: rgba(159, 37, 88, 0.1);
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border-left: 3px solid var(--accent-color);
+        animation: subtle-pulse 3s infinite;
+    }
+    
+    @keyframes subtle-pulse {
+        0% { background-color: rgba(159, 37, 88, 0.1); }
+        50% { background-color: rgba(159, 37, 88, 0.15); }
+        100% { background-color: rgba(159, 37, 88, 0.1); }
+    }
+    
+    .verification-code-group input {
+        letter-spacing: 8px;
+        font-size: 24px;
+        text-align: center;
+        font-weight: bold;
+    }
+    
+    .resend-code-link {
+        color: var(--accent-color);
+        font-weight: bold;
+        text-decoration: underline;
+    }
+    
+    .resend-code-link:hover {
+        opacity: 0.8;
+        text-decoration: none;
+    }
+</style>
+
+<script>
+    // Auto focus on the verification code input
+    document.addEventListener('DOMContentLoaded', function() {
+        const codeInput = document.getElementById('id_verification_code');
+        if (codeInput) {
+            codeInput.focus();
+        }
+        
+        // Enhance verification code input
+        const verificationCodeInput = document.getElementById('id_verification_code');
+        if (verificationCodeInput) {
+            // Allow only digits
+            verificationCodeInput.addEventListener('input', function(e) {
+                this.value = this.value.replace(/[^0-9]/g, '');
+                
+                // Limit to 6 digits
+                if (this.value.length > 6) {
+                    this.value = this.value.slice(0, 6);
+                }
+            });
+            
+            // Auto submit when 6 digits are entered
+            verificationCodeInput.addEventListener('input', function(e) {
+                if (this.value.length === 6) {
+                    // Wait a moment before submitting to allow user to see what they entered
+                    setTimeout(() => {
+                        this.form.submit();
+                    }, 500);
+                }
+            });
+        }
+        
+        const resendLink = document.querySelector('.resend-code-link');
+        if (resendLink) {
+            resendLink.addEventListener('click', function(e) {
+                this.textContent = 'Sending...';
+                this.style.opacity = '0.7';
+                this.style.pointerEvents = 'none';
+            });
+        }
+    });
+</script>
+{% endblock %}

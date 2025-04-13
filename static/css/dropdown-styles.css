@@ -1,0 +1,179 @@
+
+/* Улучшенные стили для выпадающих списков */
+.user-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    width: 280px;
+    background-color: var(--light-bg);
+    border-radius: 15px;
+    box-shadow: var(--bunny-shadow);
+    display: none;
+    overflow: hidden;
+    z-index: 1000;
+    animation: dropdownFadeIn 0.3s;
+    border: 1px solid rgba(159, 37, 88, 0.1);
+    margin-top: 15px;
+}
+
+.dark-theme .user-dropdown {
+    background-color: var(--medium-bg);
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(159, 37, 88, 0.2);
+}
+
+.user-dropdown.show {
+    display: block;
+}
+
+.user-header {
+    padding: 1.2rem;
+    border-bottom: 1px solid rgba(159, 37, 88, 0.1);
+    display: flex;
+    align-items: center;
+}
+
+.user-header .avatar {
+    margin-right: 1rem;
+}
+
+.user-name {
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+.user-email {
+    font-size: 0.8rem;
+    color: var(--gray-color);
+}
+
+.dropdown-item {
+    padding: 0.9rem 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: all 0.3s;
+    border-left: 3px solid transparent;
+    color: inherit;
+}
+
+.light-theme .dropdown-item {
+    color: var(--text-dark);
+}
+
+.dark-theme .dropdown-item {
+    color: var(--text-light);
+}
+
+.dropdown-item:hover {
+    background-color: rgba(159, 37, 88, 0.1);
+    border-left-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.dark-theme .dropdown-item:hover {
+    background-color: rgba(159, 37, 88, 0.2);
+}
+
+.dropdown-item .icon {
+    margin-right: 0.75rem;
+    font-size: 1.2rem;
+    color: var(--primary-color);
+}
+
+/* Улучшения для элементов select */
+.form-select, select.filter-select {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: inherit;
+    padding: 10px 15px;
+    border-radius: 30px;
+    border: 2px solid rgba(159, 37, 88, 0.2);
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%239f2558' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 16px;
+    padding-right: 35px;
+}
+
+.dark-theme .form-select, 
+.dark-theme select.filter-select {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: var(--text-light);
+}
+
+.light-theme .form-select,
+.light-theme select.filter-select {
+    background-color: rgba(255, 255, 255, 0.7);
+    color: var(--text-dark);
+}
+
+.form-select option, 
+select.filter-select option {
+    background-color: var(--light-bg);
+    color: var(--text-dark);
+    padding: 5px;
+}
+
+.dark-theme .form-select option,
+.dark-theme select.filter-select option {
+    background-color: var(--medium-bg);
+    color: var(--text-light);
+}
+
+/* Стили для выпадающего поиска */
+.search-dropdown {
+    position: absolute;
+    top: 100%;
+    width: 100%;
+    background-color: var(--light-bg);
+    border-radius: 0 0 15px 15px;
+    box-shadow: 0 8px 20px rgba(159, 37, 88, 0.15);
+    z-index: 1000;
+    display: none;
+    overflow: hidden;
+    margin-top: 5px;
+    border: 1px solid rgba(159, 37, 88, 0.1);
+    animation: dropdownFadeIn 0.3s;
+}
+
+.dark-theme .search-dropdown {
+    background-color: var(--medium-bg);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(159, 37, 88, 0.2);
+}
+
+.search-dropdown.show {
+    display: block;
+}
+
+.search-result {
+    padding: 12px 15px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: all 0.3s;
+    border-left: 3px solid transparent;
+    color: var(--text-dark);
+}
+
+.dark-theme .search-result {
+    color: var(--text-light);
+}
+
+.search-result:hover {
+    background-color: rgba(159, 37, 88, 0.1);
+    border-left-color: var(--primary-color);
+}
+
+.dark-theme .search-result:hover {
+    background-color: rgba(159, 37, 88, 0.2);
+}
+
+.search-title {
+    color: var(--primary-color);
+}
+
+.search-channel {
+    color: var(--gray-color);
+}

@@ -1,0 +1,181 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KRONIK - Подтверждение email</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap');
+        
+        body {
+            font-family: 'Nunito', Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
+            color: #333;
+        }
+        
+        .email-container {
+            max-width: 600px;
+            margin: 20px auto;
+            border: 1px solid #e1e1e1;
+            border-radius: 15px;
+            overflow: hidden;
+            background-color: white;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+        }
+        
+        .email-header {
+            text-align: center;
+            padding: 25px 20px;
+            background-color: white;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .logo {
+            max-width: 180px;
+            margin: 0 auto;
+        }
+        
+        .email-body {
+            padding: 30px;
+            background-color: #fff8fa;
+            border-radius: 10px;
+            margin: 20px;
+        }
+        
+        .email-footer {
+            text-align: center;
+            padding: 25px 20px;
+            color: #777;
+            font-size: 14px;
+            background-color: #f8f0f3;
+            border-top: 1px solid #f0f0f0;
+        }
+        
+        h1 {
+            color: #9f2558;
+            font-size: 24px;
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+        
+        p {
+            margin-bottom: 15px;
+        }
+        
+        .code-container {
+            text-align: center;
+            margin: 30px 0;
+        }
+        
+        .verification-code {
+            display: inline-block;
+            font-family: monospace;
+            font-size: 28px;
+            letter-spacing: 4px;
+            font-weight: bold;
+            background-color: #9f2558;
+            color: white;
+            padding: 15px 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(159, 37, 88, 0.3);
+        }
+        
+        .logo-img {
+            position: relative;
+            top: 9px;
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        .note {
+            font-size: 14px;
+            color: #777;
+            font-style: italic;
+            margin-top: 30px;
+        }
+        
+        .website-link {
+            display: inline-block;
+            margin: 30px auto;
+            padding: 15px 30px;
+            text-align: center;
+            color: #9f2558;
+            text-decoration: none;
+            background-color: #f8f0f3;
+            border-radius: 8px;
+            font-weight: bold;
+            border: 1px solid rgba(159, 37, 88, 0.2);
+        }
+        
+        .website-link:hover {
+            background-color: #f0e0e5;
+        }
+        
+        .footer-small {
+            font-size: 12px;
+            color: #999;
+            margin-top: 15px;
+        }
+        
+        .bunny-icon {
+            font-size: 28px;
+            margin: 5px 0;
+        }
+        
+        /* Media query for mobile devices */
+        @media only screen and (max-width: 480px) {
+            .email-container {
+                margin: 10px;
+                width: auto;
+            }
+            
+            .email-body {
+                padding: 20px 15px;
+                margin: 10px;
+            }
+            
+            .verification-code {
+                font-size: 24px;
+                padding: 12px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <a href="youtube.com" style="text-decoration: none"><div class="email-header">
+            <img src="https://i.imgur.com/dV6o0Rn.png" alt="KRONIK" class="logo-img" width="50" height="50">
+            <span style="font-weight: bold; color: #9f2558; font-size: 32px;">KRONIK</span>
+        </div></a>
+        
+        <div class="email-body">
+            <h1>Добро пожаловать в наше сообщество!</h1>
+            
+            <p>Последний шаг перед тем как вы начнёте понимать мир лучше - подтвердите вашу почту</p>
+            
+            <div class="code-container">
+                <div class="verification-code">{{ verification_code }}</div>
+            </div>
+            
+            <p>Введите этот код на странице подтверждения для завершения регистрации.</p>
+            
+            <p>Если вы не регистрировались на нашем сайте, проигнорируйте письмо.</p>
+            
+            <p>С уважением,<br>KRONIK</p>
+            
+            <p class="note">Код действителен в течение 15 минут.</p>
+        </div>
+        
+        <div class="email-footer">
+            <div class="bunny-icon">🐰</div>
+            <p>© 2025 KRONIK. Все права защищены.</p>
+            <p class="footer-small">*Не отвечайте на это письмо, эта почта не предназначена для этого.<br>
+            За помощью просим обращаться <a href="#">сюда</a> или на этому адресу <a href="mailto:support@kronik.net">support@kronik.net</a>.</p>
+        </div>
+    </div>
+</body>
+</html>
