@@ -54,7 +54,8 @@ function loadVideosFromGCS() {
     
     console.log(`Fetching videos: offset=${currentIndex}, limit=${videosPerPage}`);
     
-    fetch(`/api/list-videos/?offset=${currentIndex}&limit=${videosPerPage}`)
+    // Use list-all-videos endpoint to get videos from all users
+    fetch(`/api/list-all-videos/?offset=${currentIndex}&limit=${videosPerPage}`)
         .then(response => response.json())
         .then(data => {
             isLoading = false;
