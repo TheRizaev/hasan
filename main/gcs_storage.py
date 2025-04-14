@@ -85,10 +85,32 @@ def get_bucket(bucket_name=BUCKET_NAME):
             logger.error(f"Bucket {bucket_name} does not exist")
             return None
         
+        # Additional diagnostic logging
+        try:
+            blobs = list(bucket.list_blobs(max_results=100))
+            logger.info(f"Total blobs in bucket: {len(blobs)}")
+            
+            # Log first 10 blob names
+            blob_names = [blob.name for blob in blobs[:10]]
+            logger.info(f"First 10 blob names: {blob_names}")
+            
+            # Try to find unique top-level folders
+            folders = set()
+            for blob in blobs:
+                parts = blob.name.split('/')
+                if parts and parts[0]:
+                    folders.add(parts[0])
+            
+            logger.info(f"Unique top-level folders: {folders}")
+        except Exception as diag_error:
+            logger.error(f"Error during bucket diagnostic logging: {diag_error}")
+        
         logger.info(f"Successfully accessed bucket: {bucket_name}")
         return bucket
     except Exception as e:
         logger.error(f"Error getting bucket: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return None
 
 def create_user_folder_structure(user_id):

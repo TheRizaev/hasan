@@ -34,10 +34,11 @@ def index(request):
         from .gcs_storage import list_user_videos, get_bucket, BUCKET_NAME, generate_video_url, get_user_profile_from_gcs
         import random
         import concurrent.futures
+        from datetime import datetime
         
         logger.info("Starting video loading for index page")
         
-        # Получаем бакет
+        # Get the bucket
         bucket = get_bucket(BUCKET_NAME)
         if not bucket:
             logger.error("Failed to get bucket")
@@ -45,21 +46,21 @@ def index(request):
         
         logger.info(f"Connected to bucket: {BUCKET_NAME}")
         
-        # Получаем список пользователей
-        blobs = bucket.list_blobs(prefix='videos/', delimiter='/')  # Указываем подкаталог
+        # Get the list of users by listing top-level directories (FIX: removed 'videos/' prefix)
+        blobs = bucket.list_blobs(delimiter='/')
         prefixes = list(blobs.prefixes)
-        users = [prefix.replace('videos/', '').replace('/', '') for prefix in prefixes]
+        users = [prefix.replace('/', '') for prefix in prefixes]
         logger.info(f"Found {len(users)} users: {users}")
         
         if not users:
             logger.warning("No users found in GCS")
             return render(request, 'main/index.html', {'categories': categories, 'gcs_videos': []})
         
-        # Кэш для профилей пользователей
+        # Cache for user profiles
         user_profiles = {}
         all_videos = []
         
-        # Функция для загрузки видео одного пользователя
+        # Function to load videos for a single user
         def load_user_videos_and_profile(user):
             try:
                 logger.info(f"Loading profile and videos for user: {user}")
@@ -71,7 +72,7 @@ def index(request):
                 logger.error(f"Error loading data for user {user}: {e}")
                 return (user, None, [])
         
-        # Используем ThreadPoolExecutor для параллельной загрузки данных
+        # Use ThreadPoolExecutor for parallel loading
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             futures = [executor.submit(load_user_videos_and_profile, user) for user in users]
             
@@ -93,13 +94,13 @@ def index(request):
             logger.warning("No videos found across all users")
             return render(request, 'main/index.html', {'categories': categories, 'gcs_videos': []})
         
-        # Перемешиваем видео
+        # Shuffle videos for variety
         random.shuffle(all_videos)
         
-        # Ограничиваем до 20 видео
+        # Limit to 20 videos
         selected_videos = all_videos[:20]
         
-        # Добавляем URL для каждого видео
+        # Add URLs for each video
         for video in selected_videos:
             video_id = video.get('video_id')
             user_id = video.get('user_id')

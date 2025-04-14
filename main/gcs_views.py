@@ -213,19 +213,16 @@ def list_all_videos(request):
         
         logger.info(f"Connected to bucket: {BUCKET_NAME}")
         
-        # Отладка: выводим все объекты в бакете
-        all_blobs = list(bucket.list_blobs())
-        logger.info(f"Found {len(all_blobs)} objects in bucket: {[blob.name for blob in all_blobs]}")
+        # Автоматическое определение пользователей из top-level folders
+        blobs = list(bucket.list_blobs(max_results=100))
+        users = set()
+        for blob in blobs:
+            parts = blob.name.split('/')
+            if parts and parts[0] and parts[0].startswith('@'):
+                users.add(parts[0])
         
-        blobs = bucket.list_blobs(delimiter='/')
-        prefixes = list(blobs.prefixes)
-        users = [prefix.replace('/', '') for prefix in prefixes]
-        
-        logger.info(f"Found {len(users)} users: {users}")
-        
-        if not users:
-            logger.warning("No users found in GCS")
-            return JsonResponse({'success': True, 'videos': [], 'total': 0})
+        users = list(users)
+        logger.info(f"Detected users: {users}")
         
         all_videos = []
         user_profiles = {}
@@ -255,6 +252,7 @@ def list_all_videos(request):
             return JsonResponse({'success': True, 'videos': [], 'total': 0})
         
         # Перемешиваем видео
+        import random
         random.shuffle(all_videos)
         
         # Применяем пагинацию
