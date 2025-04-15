@@ -21,6 +21,7 @@ import os
 import uuid
 import logging
 import datetime
+import requests
 logger = logging.getLogger(__name__)
 
 def custom_page_not_found(request, exception):
@@ -31,110 +32,50 @@ def index(request):
     categories = Category.objects.all()
     
     try:
-        from .gcs_storage import list_user_videos, get_bucket, BUCKET_NAME, generate_video_url, get_user_profile_from_gcs
-        import random
-        import concurrent.futures
-        from datetime import datetime
+        # Импортируем только необходимые функции
+        from .gcs_storage import get_bucket, BUCKET_NAME
+        import logging
+        logger = logging.getLogger(__name__)
         
-        logger.info("Starting video loading for index page")
+        logger.info("Starting optimized video metadata loading for index page")
         
-        # Get the bucket
-        bucket = get_bucket(BUCKET_NAME)
-        if not bucket:
-            logger.error("Failed to get bucket")
-            return render(request, 'main/index.html', {'categories': categories, 'gcs_videos': []})
+        # Смотрим, есть ли кэшированные данные в сессии и используем их, если они не устарели
+        cached_videos = request.session.get('cached_videos', None)
+        cached_timestamp = request.session.get('cached_videos_timestamp', 0)
+        current_timestamp = int(datetime.datetime.now().timestamp())
         
-        logger.info(f"Connected to bucket: {BUCKET_NAME}")
+        # Используем кэш, если он не старше 5 минут
+        if cached_videos and (current_timestamp - cached_timestamp) < 300:
+            logger.info(f"Using cached videos data ({len(cached_videos)} videos)")
+            return render(request, 'main/index.html', {
+                'categories': categories,
+                'gcs_videos': cached_videos
+            })
         
-        # Get the list of users by listing top-level directories (FIX: removed 'videos/' prefix)
-        blobs = bucket.list_blobs(delimiter='/')
-        prefixes = list(blobs.prefixes)
-        users = [prefix.replace('/', '') for prefix in prefixes]
-        logger.info(f"Found {len(users)} users: {users}")
+        # Запрашиваем только метаданные первых 20 видео через API
+        # Этот API вызов должен быть оптимизирован в gcs_views.py
+        response = requests.get(f"{request.scheme}://{request.get_host()}/api/list-all-videos/?only_metadata=true&limit=20")
         
-        if not users:
-            logger.warning("No users found in GCS")
-            return render(request, 'main/index.html', {'categories': categories, 'gcs_videos': []})
-        
-        # Cache for user profiles
-        user_profiles = {}
-        all_videos = []
-        
-        # Function to load videos for a single user
-        def load_user_videos_and_profile(user):
-            try:
-                logger.info(f"Loading profile and videos for user: {user}")
-                user_profile = get_user_profile_from_gcs(user)
-                user_videos = list_user_videos(user)
-                logger.info(f"Loaded {len(user_videos)} videos for user {user}")
-                return (user, user_profile, user_videos)
-            except Exception as e:
-                logger.error(f"Error loading data for user {user}: {e}")
-                return (user, None, [])
-        
-        # Use ThreadPoolExecutor for parallel loading
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            futures = [executor.submit(load_user_videos_and_profile, user) for user in users]
-            
-            for future in concurrent.futures.as_completed(futures):
-                try:
-                    user, profile, videos = future.result()
-                    if profile:
-                        user_profiles[user] = profile
-                    all_videos.extend([
-                        {**video, 'user_id': user, 'display_name': profile.get('display_name', user.replace('@', '')) if profile else user.replace('@', '')}
-                        for video in videos
-                    ])
-                except Exception as e:
-                    logger.error(f"Error processing result: {e}")
-        
-        logger.info(f"Total videos loaded: {len(all_videos)}")
-        
-        if not all_videos:
-            logger.warning("No videos found across all users")
-            return render(request, 'main/index.html', {'categories': categories, 'gcs_videos': []})
-        
-        # Shuffle videos for variety
-        random.shuffle(all_videos)
-        
-        # Limit to 20 videos
-        selected_videos = all_videos[:20]
-        
-        # Add URLs for each video
-        for video in selected_videos:
-            video_id = video.get('video_id')
-            user_id = video.get('user_id')
-            if video_id and user_id:
-                video['url'] = generate_video_url(user_id, video_id, expiration_time=3600)
-                if 'thumbnail_path' in video:
-                    video['thumbnail_url'] = generate_video_url(
-                        user_id, video_id, file_path=video['thumbnail_path'], expiration_time=3600
-                    )
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('success') and data.get('videos'):
+                selected_videos = data.get('videos')
                 
-                video['channel'] = video.get('display_name', video.get('user_id', ''))
-                views = video.get('views', 0)
-                if isinstance(views, (int, str)) and str(views).isdigit():
-                    views = int(views)
-                    video['views_formatted'] = f"{views // 1000}K просмотров" if views >= 1000 else f"{views} просмотров"
-                else:
-                    video['views_formatted'] = "0 просмотров"
+                # Кэшируем результаты в сессии для последующих запросов
+                request.session['cached_videos'] = selected_videos
+                request.session['cached_videos_timestamp'] = current_timestamp
                 
-                upload_date = video.get('upload_date', '')
-                if upload_date:
-                    try:
-                        upload_datetime = datetime.fromisoformat(upload_date)
-                        video['upload_date_formatted'] = upload_datetime.strftime("%d.%m.%Y")
-                    except Exception:
-                        video['upload_date_formatted'] = upload_date[:10] if upload_date else "Недавно"
+                logger.info(f"Successfully loaded {len(selected_videos)} video metadata from API")
+                return render(request, 'main/index.html', {
+                    'categories': categories,
+                    'gcs_videos': selected_videos
+                })
         
-        logger.info(f"Prepared {len(selected_videos)} videos for display")
-        return render(request, 'main/index.html', {
-            'categories': categories,
-            'gcs_videos': selected_videos
-        })
-    
+        logger.warning("Failed to load videos from API, falling back to empty state")
+        return render(request, 'main/index.html', {'categories': categories, 'gcs_videos': []})
+        
     except Exception as e:
-        logger.error(f"Error fetching GCS videos: {e}")
+        logger.error(f"Error in optimized index view: {e}")
         return render(request, 'main/index.html', {'categories': categories, 'gcs_videos': []})
 
 def video_detail(request, video_id):

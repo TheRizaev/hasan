@@ -7,7 +7,7 @@ from django.views.decorators.http import require_http_methods
 from django.conf import settings
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 import tempfile
 import logging
@@ -151,69 +151,42 @@ def upload_video_to_gcs(request):
         logger.error(f"Error uploading video: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
-@login_required
-def list_videos_from_gcs(request):
-    """
-    Получает список видео пользователя из GCS с улучшенной обработкой и проверкой миниатюр
-    """
-    try:
-        username = request.user.username
-        # ВАЖНО: больше не удаляем префикс @, сохраняем его для GCS
-            
-        videos = list_user_videos(username)
-        
-        # Добавляем временные URL для каждого видео
-        for video in videos:
-            video_id = video.get('video_id')
-            if video_id:
-                video['url'] = generate_video_url(username, video_id, expiration_time=3600)
-                
-                # Более надежная проверка наличия миниатюры
-                if 'thumbnail_path' in video and video['thumbnail_path']:
-                    try:
-                        # Проверяем существование блоба миниатюры
-                        bucket = get_bucket()
-                        if bucket:
-                            thumbnail_blob = bucket.blob(video['thumbnail_path'])
-                            if thumbnail_blob.exists():
-                                video['thumbnail_url'] = generate_video_url(
-                                    username, 
-                                    video_id, 
-                                    file_path=video['thumbnail_path'], 
-                                    expiration_time=3600
-                                )
-                                logger.info(f"Generated thumbnail URL for video {video_id}: {video['thumbnail_url']}")
-                            else:
-                                logger.warning(f"Thumbnail blob does not exist for video {video_id}: {video['thumbnail_path']}")
-                    except Exception as thumb_err:
-                        logger.error(f"Error checking thumbnail for video {video_id}: {thumb_err}")
-        
-        return JsonResponse({
-            'success': True,
-            'videos': videos
-        })
-        
-    except Exception as e:
-        logger.error(f"Error getting video list: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
 
 def list_all_videos(request):
+    """
+    Полностью переработанная функция для получения списка видео.
+    Напрямую ищет видео в GCS без использования кэша.
+    """
     try:
-        from .gcs_storage import list_user_videos, get_bucket, BUCKET_NAME, generate_video_url, get_user_profile_from_gcs
+        from .gcs_storage import get_bucket, BUCKET_NAME, generate_video_url
+        import logging
+        import json
+        from datetime import datetime
         
-        logger.info("Starting list_all_videos API request")
+        logger = logging.getLogger(__name__)
         
-        offset = int(request.GET.get('offset', 0))
-        limit = int(request.GET.get('limit', 20))
+        logger.info("Starting direct list_all_videos API request")
         
+        # Параметры пагинации и фильтрации
+        try:
+            offset = int(request.GET.get('offset', 0))
+        except (ValueError, TypeError):
+            offset = 0
+            
+        try:
+            limit = int(request.GET.get('limit', 20))
+        except (ValueError, TypeError):
+            limit = 20
+            
+        only_metadata = request.GET.get('only_metadata', 'false').lower() == 'true'
+        
+        # Получаем бакет
         bucket = get_bucket(BUCKET_NAME)
         if not bucket:
             logger.error("Failed to get bucket")
-            return JsonResponse({'error': 'Failed to get bucket'}, status=500)
+            return JsonResponse({'error': 'Не удалось получить доступ к хранилищу'}, status=500)
         
-        logger.info(f"Connected to bucket: {BUCKET_NAME}")
-        
-        # Автоматическое определение пользователей из top-level folders
+        # Получаем список пользователей напрямую
         blobs = list(bucket.list_blobs(max_results=100))
         users = set()
         for blob in blobs:
@@ -221,80 +194,126 @@ def list_all_videos(request):
             if parts and parts[0] and parts[0].startswith('@'):
                 users.add(parts[0])
         
-        users = list(users)
-        logger.info(f"Detected users: {users}")
+        logger.info(f"Found {len(users)} users in direct fetch")
         
+        # Собираем все видео
         all_videos = []
-        user_profiles = {}
         
-        # Загружаем видео и профили
-        for user in users:
+        for user_id in users:
             try:
-                logger.info(f"Loading profile and videos for user: {user}")
-                user_profile = get_user_profile_from_gcs(user)
-                user_videos = list_user_videos(user)
-                logger.info(f"Loaded {len(user_videos)} videos for user {user}")
+                # Ищем папку metadata для пользователя
+                metadata_prefix = f"{user_id}/metadata/"
+                metadata_blobs = list(bucket.list_blobs(prefix=metadata_prefix))
                 
-                if user_profile:
-                    user_profiles[user] = user_profile
+                # Получаем профиль пользователя
+                user_profile = None
+                try:
+                    user_meta_blob = bucket.blob(f"{user_id}/bio/user_meta.json")
+                    if user_meta_blob.exists():
+                        user_profile = json.loads(user_meta_blob.download_as_text())
+                except Exception as profile_error:
+                    logger.error(f"Error loading profile for {user_id}: {profile_error}")
                 
-                all_videos.extend([
-                    {**video, 'user_id': user, 'display_name': user_profile.get('display_name', user.replace('@', '')) if user_profile else user.replace('@', '')}
-                    for video in user_videos
-                ])
+                # Перебираем все JSON-файлы метаданных для видео
+                for blob in metadata_blobs:
+                    if blob.name.endswith('.json'):
+                        try:
+                            # Получаем метаданные видео
+                            metadata = json.loads(blob.download_as_text())
+                            
+                            # Добавляем информацию о пользователе
+                            metadata['user_id'] = user_id
+                            if user_profile:
+                                metadata['display_name'] = user_profile.get('display_name', user_id.replace('@', ''))
+                            else:
+                                metadata['display_name'] = user_id.replace('@', '')
+                            
+                            # Добавляем канал для совместимости с шаблоном
+                            metadata['channel'] = metadata.get('display_name', user_id.replace('@', ''))
+                            
+                            # Форматируем просмотры
+                            views = metadata.get('views', 0)
+                            if isinstance(views, (int, str)) and str(views).isdigit():
+                                views = int(views)
+                                metadata['views_formatted'] = f"{views // 1000}K просмотров" if views >= 1000 else f"{views} просмотров"
+                            else:
+                                metadata['views_formatted'] = "0 просмотров"
+                            
+                            # Форматируем дату загрузки
+                            upload_date = metadata.get('upload_date', '')
+                            if upload_date:
+                                try:
+                                    upload_datetime = datetime.fromisoformat(upload_date)
+                                    metadata['upload_date_formatted'] = upload_datetime.strftime("%d.%m.%Y")
+                                except Exception:
+                                    metadata['upload_date_formatted'] = upload_date[:10] if upload_date else "Недавно"
+                            else:
+                                metadata['upload_date_formatted'] = "Недавно"
+                            
+                            all_videos.append(metadata)
+                        except Exception as e:
+                            logger.error(f"Error processing metadata for {blob.name}: {e}")
             except Exception as e:
-                logger.error(f"Error loading data for user {user}: {e}")
+                logger.error(f"Error processing user {user_id}: {e}")
         
-        logger.info(f"Total videos loaded: {len(all_videos)}")
-        
+        # Проверяем, нашли ли мы видео
         if not all_videos:
-            logger.warning("No videos found across all users")
-            return JsonResponse({'success': True, 'videos': [], 'total': 0})
+            logger.warning("No videos found in direct search")
+            # Возвращаем пустой список
+            return JsonResponse({
+                'success': True,
+                'videos': [],
+                'total': 0
+            })
         
-        # Перемешиваем видео
-        import random
-        random.shuffle(all_videos)
+        # Сортируем видео по дате загрузки (новые сначала)
+        try:
+            all_videos.sort(key=lambda x: x.get('upload_date', ''), reverse=True)
+        except Exception as sort_error:
+            logger.error(f"Error sorting videos: {sort_error}")
+        
+        total_videos = len(all_videos)
         
         # Применяем пагинацию
-        selected_videos = all_videos[offset:offset + limit]
+        paginated_videos = all_videos[offset:offset + limit]
         
-        # Форматируем видео
-        for video in selected_videos:
-            video_id = video.get('video_id')
-            user_id = video.get('user_id')
-            if video_id and user_id:
-                video['url'] = generate_video_url(user_id, video_id, expiration_time=3600)
-                if 'thumbnail_path' in video:
-                    video['thumbnail_url'] = generate_video_url(
-                        user_id, video_id, file_path=video['thumbnail_path'], expiration_time=3600
-                    )
-                
-                video['channel'] = video.get('display_name', video.get('user_id', ''))
-                views = video.get('views', 0)
-                if isinstance(views, (int, str)) and str(views).isdigit():
-                    views = int(views)
-                    video['views_formatted'] = f"{views // 1000}K просмотров" if views >= 1000 else f"{views} просмотров"
-                else:
-                    video['views_formatted'] = "0 просмотров"
-                
-                upload_date = video.get('upload_date', '')
-                if upload_date:
-                    try:
-                        upload_datetime = datetime.fromisoformat(upload_date)
-                        video['upload_date_formatted'] = upload_datetime.strftime("%d.%m.%Y")
-                    except Exception:
-                        video['upload_date_formatted'] = upload_date[:10] if upload_date else "Недавно"
+        # Если запрашиваются только метаданные, возвращаем их как есть
+        if not only_metadata:
+            # Генерируем URL для видео и миниатюр
+            for video in paginated_videos:
+                try:
+                    video_id = video.get('video_id')
+                    user_id = video.get('user_id')
+                    
+                    if video_id and user_id:
+                        # URL для видео
+                        video['url'] = generate_video_url(user_id, video_id, expiration_time=3600)
+                        
+                        # URL для миниатюры
+                        if 'thumbnail_path' in video:
+                            video['thumbnail_url'] = generate_video_url(
+                                user_id, video_id, file_path=video['thumbnail_path'], expiration_time=3600
+                            )
+                except Exception as url_error:
+                    logger.error(f"Error generating URL for video {video.get('video_id')}: {url_error}")
         
-        logger.info(f"Returning {len(selected_videos)} videos, offset={offset}, limit={limit}")
+        logger.info(f"Returning {len(paginated_videos)} videos from direct fetch")
         return JsonResponse({
             'success': True,
-            'videos': selected_videos,
-            'total': len(all_videos)
+            'videos': paginated_videos,
+            'total': total_videos
         })
     
     except Exception as e:
-        logger.error(f"Error listing all videos: {e}")
-        return JsonResponse({'error': str(e)}, status=500)
+        import traceback
+        logger.error(f"Error in direct list_all_videos: {e}")
+        logger.error(traceback.format_exc())
+        
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'videos': []
+        }, status=500)
 
 # Улучшенная функция для генерации URL
 def generate_video_url(user_id, video_id, file_path=None, expiration_time=3600):
@@ -355,26 +374,30 @@ def studio_view(request):
     
     try:
         # Получаем видео пользователя
-        videos = list_user_videos(username)
+        videos_response = list_user_videos(request, username)
         
-        # Создаем URL для каждого видео и его миниатюры
+        # Проверяем, что получили успешный ответ
+        if isinstance(videos_response, JsonResponse):
+            videos_data = videos_response.get_json()
+            if videos_data.get('success'):
+                videos = videos_data.get('videos', [])
+            else:
+                raise Exception(videos_data.get('error', 'Неизвестная ошибка при получении видео'))
+        else:
+            videos = videos_response  # Если list_user_videos возвращает список напрямую
+        
+        # Логика обработки видео уже выполнена в list_user_videos,
+        # но можем добавить дополнительную проверку миниатюр, если нужно
         for video in videos:
             video_id = video.get('video_id')
-            if video_id:
-                # Генерируем URL для самого видео
-                video['url'] = generate_video_url(username, video_id, expiration_time=3600)
-                
-                # Более надежная проверка наличия миниатюры
+            if video_id and 'thumbnail_url' not in video:
+                # Проверяем миниатюру, если она не была сгенерирована
                 if 'thumbnail_path' in video and video['thumbnail_path']:
                     try:
-                        # Получаем доступ к бакету
                         bucket = get_bucket()
                         if bucket:
-                            # Проверяем существование файла миниатюры в GCS
                             thumbnail_blob = bucket.blob(video['thumbnail_path'])
-                            
                             if thumbnail_blob.exists():
-                                # Генерируем URL для миниатюры
                                 video['thumbnail_url'] = generate_video_url(
                                     username, 
                                     video_id, 
@@ -432,18 +455,38 @@ def delete_video_from_gcs(request, video_id):
 @require_http_methods(["GET"])
 def get_video_url(request, video_id):
     """
-    Получает временный URL для видео
+    Получает временный URL для видео или его миниатюры.
+    Улучшенная версия с поддержкой запроса только миниатюры.
+    
+    Параметры:
+    - thumbnail: если 'true', вернет URL миниатюры вместо видео
     """
     try:
         username = request.user.username
-        # ВАЖНО: больше не удаляем префикс @, сохраняем его для GCS
-            
-        url = generate_video_url(username, video_id, expiration_time=3600)
+        is_thumbnail = request.GET.get('thumbnail', 'false').lower() == 'true'
+        
+        # Получаем метаданные видео
+        from .gcs_storage import get_video_metadata, generate_video_url
+        metadata = get_video_metadata(username, video_id)
+        
+        if not metadata:
+            return JsonResponse({'error': 'Метаданные видео не найдены'}, status=404)
+        
+        if is_thumbnail:
+            thumbnail_path = metadata.get('thumbnail_path')
+            if not thumbnail_path:
+                return JsonResponse({'error': 'У видео нет миниатюры'}, status=404)
+                
+            url = generate_video_url(username, video_id, file_path=thumbnail_path, expiration_time=3600)
+        else:
+            # Генерируем URL для самого видео
+            url = generate_video_url(username, video_id, expiration_time=3600)
         
         if url:
             return JsonResponse({
                 'success': True,
-                'url': url
+                'url': url,
+                'is_thumbnail': is_thumbnail
             })
         else:
             return JsonResponse({'error': 'Не удалось сгенерировать URL'}, status=400)
@@ -451,3 +494,88 @@ def get_video_url(request, video_id):
     except Exception as e:
         logger.error(f"Error generating URL: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
+
+@require_http_methods(["GET"])
+def get_thumbnail_url(request, video_id):
+    """
+    Отдельный эндпоинт для получения URL миниатюры для видео.
+    Поддерживает использование как для своих, так и для чужих видео.
+    
+    Args:
+        video_id: ID видео или составной ID пользователь__видео
+    """
+    try:
+        # Проверяем, содержит ли video_id составной идентификатор
+        if '__' in video_id:
+            user_id, gcs_video_id = video_id.split('__', 1)
+        else:
+            # Если пользователь авторизован, используем его ID
+            if request.user.is_authenticated:
+                user_id = request.user.username
+                gcs_video_id = video_id
+            else:
+                return JsonResponse({'error': 'Необходимо указать ID пользователя в формате user__video'}, status=400)
+        
+        # Получаем метаданные видео
+        from .gcs_storage import get_video_metadata, generate_video_url
+        
+        metadata = get_video_metadata(user_id, gcs_video_id)
+        if not metadata:
+            return JsonResponse({'error': 'Метаданные видео не найдены'}, status=404)
+        
+        # Генерируем URL для миниатюры
+        thumbnail_path = metadata.get('thumbnail_path')
+        if not thumbnail_path:
+            return JsonResponse({'error': 'У видео нет миниатюры'}, status=404)
+            
+        url = generate_video_url(user_id, gcs_video_id, file_path=thumbnail_path, expiration_time=3600)
+        
+        if url:
+            return JsonResponse({
+                'success': True,
+                'url': url
+            })
+        else:
+            return JsonResponse({'error': 'Не удалось сгенерировать URL миниатюры'}, status=400)
+            
+    except Exception as e:
+        logger.error(f"Error generating thumbnail URL: {str(e)}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+@require_http_methods(["GET"])
+def refresh_metadata_cache(request):
+    """
+    API для принудительного обновления кэша метаданных видео.
+    Требует аутентификации и доступен только админам.
+    """
+    try:
+        # Проверяем, является ли пользователь суперпользователем
+        if not request.user.is_superuser:
+            return JsonResponse({
+                'success': False,
+                'error': 'Доступ запрещен. Требуются права администратора.'
+            }, status=403)
+            
+        from .gcs_storage import cache_video_metadata
+        
+        # Обновляем кэш метаданных
+        success = cache_video_metadata()
+        
+        if success:
+            return JsonResponse({
+                'success': True,
+                'message': 'Кэш метаданных видео успешно обновлен'
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': 'Не удалось обновить кэш метаданных'
+            }, status=500)
+            
+    except Exception as e:
+        logger.error(f"Error refreshing metadata cache: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)

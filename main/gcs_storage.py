@@ -840,3 +840,200 @@ def get_user_profile_from_gcs(user_id):
     except Exception as e:
         logger.error(f"Error retrieving user profile from GCS: {e}")
         return None
+    
+def cache_video_metadata():
+    """
+    Создает и обновляет кэш метаданных для всех видео в системе.
+    Этот кэш помогает быстро загружать списки видео без обращения к каждому файлу.
+    """
+    try:
+        bucket = get_bucket()
+        if not bucket:
+            logger.error("Could not get bucket for caching metadata")
+            return False
+            
+        # Создаем папку для кэша, если она не существует
+        system_folder_blob = bucket.blob('system/.keep')
+        if not system_folder_blob.exists():
+            system_folder_blob.upload_from_string('')
+            
+        cache_folder_blob = bucket.blob('system/cache/.keep')
+        if not cache_folder_blob.exists():
+            cache_folder_blob.upload_from_string('')
+        
+        # Структура для хранения метаданных всех видео
+        all_metadata = []
+        
+        # Получаем список пользователей (папок верхнего уровня)
+        blobs = bucket.list_blobs(delimiter='/')
+        prefixes = list(blobs.prefixes)
+        users = [prefix.replace('/', '') for prefix in prefixes 
+                if not prefix.startswith('system/')]
+        
+        logger.info(f"Starting metadata cache creation for {len(users)} users")
+        
+        # Для каждого пользователя собираем метаданные видео
+        for user_id in users:
+            try:
+                # Проверяем, что это папка пользователя (начинается с @)
+                if not user_id.startswith('@'):
+                    continue
+                
+                # Ищем только метаданные в формате JSON
+                metadata_prefix = f"{user_id}/metadata/"
+                metadata_blobs = list(bucket.list_blobs(prefix=metadata_prefix))
+                
+                # Проверяем, есть ли метаданные
+                if not metadata_blobs:
+                    logger.info(f"No metadata found for user {user_id}")
+                    continue
+                
+                user_profile = None
+                # Пытаемся получить профиль пользователя один раз
+                user_meta_blob = bucket.blob(f"{user_id}/bio/user_meta.json")
+                if user_meta_blob.exists():
+                    try:
+                        user_profile = json.loads(user_meta_blob.download_as_text())
+                    except json.JSONDecodeError:
+                        logger.error(f"Invalid JSON in user profile for {user_id}")
+                        user_profile = None
+                
+                # Обрабатываем все метаданные видео пользователя
+                for blob in metadata_blobs:
+                    if blob.name.endswith('.json'):
+                        try:
+                            metadata_text = blob.download_as_text()
+                            metadata = json.loads(metadata_text)
+                            
+                            # Обогащаем метаданные информацией о пользователе
+                            metadata['user_id'] = user_id
+                            if user_profile:
+                                metadata['display_name'] = user_profile.get('display_name', user_id.replace('@', ''))
+                            else:
+                                metadata['display_name'] = user_id.replace('@', '')
+                                
+                            # Сохраняем путь к миниатюре, но не генерируем URL
+                            if 'thumbnail_path' in metadata:
+                                metadata['has_thumbnail'] = True
+                            else:
+                                metadata['has_thumbnail'] = False
+                                
+                            # Форматируем метаданные для отображения
+                            views = metadata.get('views', 0)
+                            if isinstance(views, (int, str)) and str(views).isdigit():
+                                views = int(views)
+                                metadata['views_formatted'] = f"{views // 1000}K просмотров" if views >= 1000 else f"{views} просмотров"
+                            else:
+                                metadata['views_formatted'] = "0 просмотров"
+                                
+                            upload_date = metadata.get('upload_date', '')
+                            if upload_date:
+                                try:
+                                    from datetime import datetime
+                                    upload_datetime = datetime.fromisoformat(upload_date)
+                                    metadata['upload_date_formatted'] = upload_datetime.strftime("%d.%m.%Y")
+                                except Exception:
+                                    metadata['upload_date_formatted'] = upload_date[:10] if upload_date else "Недавно"
+                            
+                            all_metadata.append(metadata)
+                        except Exception as e:
+                            logger.error(f"Error processing metadata {blob.name}: {e}")
+            except Exception as e:
+                logger.error(f"Error processing user {user_id}: {e}")
+        
+        # Если не нашли видео, создаем пустой кэш
+        if not all_metadata:
+            logger.warning("No videos found in the system")
+            cache_blob = bucket.blob('system/cache/videos_metadata_cache.json')
+            cache_blob.upload_from_string(json.dumps([]), content_type='application/json')
+            return True
+        
+        # Сортируем по дате загрузки (новые сначала)
+        all_metadata.sort(key=lambda x: x.get('upload_date', ''), reverse=True)
+        
+        # Сохраняем кэш в GCS
+        cache_blob = bucket.blob('system/cache/videos_metadata_cache.json')
+        cache_blob.upload_from_string(json.dumps(all_metadata), content_type='application/json')
+        
+        logger.info(f"Successfully cached metadata for {len(all_metadata)} videos")
+        return True
+    except Exception as e:
+        logger.error(f"Error caching metadata: {e}")
+        return False
+
+
+def get_cached_metadata(limit=None, offset=0, shuffle=False):
+    """
+    Получает кэшированные метаданные видео с пагинацией.
+    
+    Args:
+        limit: Максимальное количество записей (если None, возвращает все)
+        offset: Смещение для пагинации
+        shuffle: Перемешивать ли результаты
+        
+    Returns:
+        Список метаданных видео и общее количество видео
+    """
+    try:
+        bucket = get_bucket()
+        if not bucket:
+            logger.error("Could not get bucket for getting cached metadata")
+            return [], 0
+            
+        cache_blob = bucket.blob('system/cache/videos_metadata_cache.json')
+        
+        if not cache_blob.exists():
+            # Если кэш не существует, создаем его
+            logger.info("Cache doesn't exist, creating it now")
+            cache_video_metadata()
+            
+            # Проверяем снова
+            if not cache_blob.exists():
+                logger.error("Failed to create cache")
+                return [], 0
+        
+        # Получаем возраст кэша
+        import time
+        from datetime import datetime, timedelta
+        
+        cache_age = datetime.now() - datetime.fromtimestamp(cache_blob.updated)
+        
+        # Если кэш старше 15 минут, обновляем его в фоновом режиме
+        if cache_age > timedelta(minutes=0.5):
+            logger.info(f"Cache is {cache_age} old, scheduling update")
+            # В реальной системе здесь можно запустить фоновую задачу для обновления кэша
+            # Но для упрощения, мы просто обновим его при следующем запросе
+        
+        # Загружаем кэш
+        cache_content = cache_blob.download_as_text()
+        all_metadata = json.loads(cache_content)
+        
+        total_videos = len(all_metadata)
+        
+        # Перемешиваем, если требуется
+        if shuffle:
+            import random
+            random.shuffle(all_metadata)
+        
+        # Проверяем валидность offset
+        if offset < 0:
+            offset = 0
+        
+        # Применяем пагинацию
+        # Проверка типа limit и установка значения по умолчанию, если None
+        if limit is None:
+            paginated_metadata = all_metadata[offset:]
+        else:
+            try:
+                # Преобразуем limit в integer, если это возможно
+                limit_int = int(limit)
+                paginated_metadata = all_metadata[offset:offset + limit_int]
+            except (ValueError, TypeError):
+                # В случае ошибки используем offset без limit
+                logger.warning(f"Invalid limit value: {limit}, using all items from offset")
+                paginated_metadata = all_metadata[offset:]
+            
+        return paginated_metadata, total_videos
+    except Exception as e:
+        logger.error(f"Error getting cached metadata: {e}")
+        return [], 0
