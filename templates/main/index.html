@@ -3,6 +3,10 @@
 
 {% block title %}KRONIK{% endblock %}
 
+{% block head_extra %}
+<script src="{% static 'js/lazy-loading.js' %}"></script>
+{% endblock %}
+
 {% block content %}
 <div class="category-filter">
     <div class="category-chip active">Все</div>
@@ -23,12 +27,13 @@
 <div class="videos-grid" id="videos-container">
     {% if gcs_videos %}
         {% for video in gcs_videos %}
-        <div class="video-card" onclick="window.location.href='/video/{{ video.user_id }}__{{ video.video_id }}/'">
+        <div class="video-card" data-video-id="{{ video.video_id }}" data-user-id="{{ video.user_id }}" onclick="window.location.href='/video/{{ video.user_id }}__{{ video.video_id }}/'">
             <div class="thumbnail">
                 {% if video.thumbnail_url %}
                     <img src="{{ video.thumbnail_url }}" alt="{{ video.title }}" loading="lazy" onerror="this.src='{% static 'placeholder.jpg' %}'">
                 {% else %}
-                    <img src="{% static 'placeholder.jpg' %}" alt="{{ video.title }}" loading="lazy">
+                    <!-- Используем плейсхолдер и заготавливаем элемент для ленивой загрузки -->
+                    <img class="lazy-load-thumbnail" src="{% static 'placeholder.jpg' %}" data-video-id="{{ video.video_id }}" data-user-id="{{ video.user_id }}" alt="{{ video.title }}" loading="lazy">
                 {% endif %}
                 <div class="duration">{{ video.duration|default:"00:00" }}</div>
             </div>
@@ -44,4 +49,116 @@
         {% endfor %}
     {% endif %}
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Инициализация ленивой загрузки миниатюр для видео без URL миниатюр
+    const lazyThumbnails = document.querySelectorAll('.lazy-load-thumbnail');
+    
+    if (lazyThumbnails.length > 0) {
+        console.log(`Initializing lazy loading for ${lazyThumbnails.length} thumbnails`);
+        
+        // Если есть браузерная поддержка для IntersectionObserver, используем ее
+        if ('IntersectionObserver' in window) {
+            const imageObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const img = entry.target;
+                        const videoId = img.getAttribute('data-video-id');
+                        const userId = img.getAttribute('data-user-id');
+                        
+                        if (videoId && userId) {
+                            // Пытаемся сначала получить URL из sessionStorage
+                            const cachedUrl = sessionStorage.getItem(`thumbnail_${userId}__${videoId}`);
+                            
+                            if (cachedUrl) {
+                                // Используем кэшированный URL
+                                img.src = cachedUrl;
+                                imageObserver.unobserve(img);
+                            } else {
+                                // Запрашиваем URL миниатюры у сервера
+                                fetch(`/api/get-thumbnail-url/${userId}__${videoId}/`)
+                                    .then(response => response.json())
+                                    .then(data => {
+                                        if (data.success && data.url) {
+                                            // Кэшируем URL для повторного использования
+                                            sessionStorage.setItem(`thumbnail_${userId}__${videoId}`, data.url);
+                                            
+                                            // Устанавливаем URL в изображение
+                                            img.src = data.url;
+                                            
+                                            // Прекращаем наблюдение за этим элементом
+                                            imageObserver.unobserve(img);
+                                        }
+                                    })
+                                    .catch(error => {
+                                        console.error('Error loading thumbnail:', error);
+                                    });
+                            }
+                        }
+                    }
+                });
+            }, {
+                rootMargin: '200px 0px',  // Подгружаем, когда элемент находится в 200px от видимой области
+                threshold: 0.01
+            });
+            
+            // Добавляем все изображения для наблюдения
+            lazyThumbnails.forEach(img => {
+                imageObserver.observe(img);
+            });
+        } else {
+            // Если IntersectionObserver не поддерживается, загружаем при прокрутке
+            function lazyLoad() {
+                const scrollTop = window.pageYOffset;
+                const viewportHeight = window.innerHeight;
+                
+                lazyThumbnails.forEach(img => {
+                    const rect = img.getBoundingClientRect();
+                    
+                    // Если изображение близко к видимой области
+                    if (rect.top <= viewportHeight + 200) {
+                        const videoId = img.getAttribute('data-video-id');
+                        const userId = img.getAttribute('data-user-id');
+                        
+                        if (videoId && userId) {
+                            // Пытаемся сначала получить URL из sessionStorage
+                            const cachedUrl = sessionStorage.getItem(`thumbnail_${userId}__${videoId}`);
+                            
+                            if (cachedUrl) {
+                                // Используем кэшированный URL
+                                img.src = cachedUrl;
+                                img.classList.remove('lazy-load-thumbnail');
+                            } else {
+                                // Запрашиваем URL миниатюры у сервера
+                                fetch(`/api/get-thumbnail-url/${userId}__${videoId}/`)
+                                    .then(response => response.json())
+                                    .then(data => {
+                                        if (data.success && data.url) {
+                                            // Кэшируем URL для повторного использования
+                                            sessionStorage.setItem(`thumbnail_${userId}__${videoId}`, data.url);
+                                            
+                                            // Устанавливаем URL в изображение
+                                            img.src = data.url;
+                                            img.classList.remove('lazy-load-thumbnail');
+                                        }
+                                    })
+                                    .catch(error => {
+                                        console.error('Error loading thumbnail:', error);
+                                    });
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Вызываем загрузку первоначально и при прокрутке
+            lazyLoad();
+            window.addEventListener('scroll', function() {
+                lazyLoad();
+            }, { passive: true });
+        }
+    }
+});
+</script>
 {% endblock %}

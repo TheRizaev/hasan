@@ -141,10 +141,9 @@
             <div class="video-info-bar">
                 <div class="views-info">{{ video.views_formatted }} • {{ video.upload_date_formatted|default:video.age }}</div>
                 <div class="actions-bar">
-                    <button class="action-button" id="likeButton">👍 <span id="likeCount">{{ video.likes|default:"0" }}</span></button>
-                    <button class="action-button" id="dislikeButton">👎 <span id="dislikeCount">{{ video.dislikes|default:"0" }}</span></button>
-                    <button class="action-button">↗️ Поделиться</button>
-                    <button class="action-button">💾 Сохранить</button>
+                    <button class="action-button" id="likeButton"><span id="likeCount">{{ video.likes|default:"0" }}</span> <img src="/static/icons/like.svg" alt="Студия" width="20" height="20"> Нравиться</button>
+                    <button class="action-button" id="dislikeButton"><span id="dislikeCount">{{ video.dislikes|default:"0" }}</span><img src="/static/icons/dislike.svg" alt="Студия" width="20" height="20"> Не нравиться</button>
+                    <button class="action-button"><img src="/static/icons/share.svg" alt="Студия" width="20" height="20"> Поделиться</button>
                 </div>
             </div>
             

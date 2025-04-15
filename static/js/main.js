@@ -54,8 +54,11 @@ function loadVideosFromGCS() {
     
     console.log(`Fetching videos: offset=${currentIndex}, limit=${videosPerPage}`);
     
+    // Используем оптимизированный API endpoint с указанием, что thumbnail URL нужны только на первой загрузке
+    const needThumbnails = currentIndex === 0 ? 'false' : 'false';
+    
     // Use list-all-videos endpoint to get videos from all users
-    fetch(`/api/list-all-videos/?offset=${currentIndex}&limit=${videosPerPage}`)
+    fetch(`/api/list-all-videos/?offset=${currentIndex}&limit=${videosPerPage}&only_metadata=${needThumbnails}`)
         .then(response => response.json())
         .then(data => {
             isLoading = false;
@@ -90,6 +93,11 @@ function loadVideosFromGCS() {
                             </div>
                         `;
                         videosContainer.appendChild(emptyState);
+                    } else {
+                        // Если это первичная загрузка, включим отложенную загрузку миниатюр
+                        if (currentIndex === data.videos.length) {
+                            setTimeout(lazyLoadThumbnails, 100);
+                        }
                     }
                 }
             } else {
