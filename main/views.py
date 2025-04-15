@@ -741,23 +741,23 @@ def profile_view(request):
     
     return render(request, 'accounts/profile.html', {'form': form})
 
-@login_required
-def studio_view(request):
-    """
-    View for the creator studio page.
-    Only authenticated users who are approved authors can access this page.
-    """
-    # Проверяем, является ли пользователь автором
-    if not request.user.profile.is_author:
-        messages.error(request, 'У вас нет доступа к Студии. Вы должны стать автором, чтобы получить доступ.')
-        return redirect('become_author')
+# @login_required
+# def studio_view(request):
+#     """
+#     View for the creator studio page.
+#     Only authenticated users who are approved authors can access this page.
+#     """
+#     # Проверяем, является ли пользователь автором
+#     if not request.user.profile.is_author:
+#         messages.error(request, 'У вас нет доступа к Студии. Вы должны стать автором, чтобы получить доступ.')
+#         return redirect('become_author')
         
-    # Для демонстрации, мы будем использовать пустой список видео
-    videos = []
+#     # Для демонстрации, мы будем использовать пустой список видео
+#     videos = []
     
-    return render(request, 'studio/studio.html', {
-        'videos': videos
-    })
+#     return render(request, 'studio/studio.html', {
+#         'videos': videos
+#     })
 
 @login_required
 def author_application(request):

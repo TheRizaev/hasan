@@ -21,7 +21,8 @@ urlpatterns = [
     
     # API для Google Cloud Storage
     path('api/upload-video/', gcs_views.upload_video_to_gcs, name='upload_video_to_gcs'),
-    # path('api/list-videos/', gcs_views.list_videos_from_gcs, name='list_videos_from_gcs'),
+    path('api/list-user-videos/', gcs_views.list_user_videos, name='list_user_videos'),
+    path('api/list-user-videos/<str:username>/', gcs_views.list_user_videos, name='list_user_videos_for_user'),
     path('api/list-all-videos/', gcs_views.list_all_videos, name='list_all_videos'),
     path('api/delete-video/<str:video_id>/', gcs_views.delete_video_from_gcs, name='delete_video_from_gcs'),
     path('api/get-video-url/<str:video_id>/', gcs_views.get_video_url, name='get_video_url'),
