@@ -7,11 +7,10 @@
 {% block content %}
 <div class="video-page-layout">
     <div class="video-content">
-        <div class="video-container">
+        <div class="video-container" data-video-id="{{ video.gcs_id }}" data-user-id="{{ video.user_id }}">
             <div class="video-wrapper">
-                <video id="video-player" poster="{% if video.thumbnail_url %}{{ video.thumbnail_url }}{% else %}{% static 'placeholder.jpg' %}{% endif %}" preload="auto">
-                    <source src="{{ video.video_url|default:'#' }}" type="video/mp4">
-                    Ваш браузер не поддерживает видео HTML5.
+                <video id="video-player" poster="{% if video.thumbnail_url %}{{ video.thumbnail_url }}{% else %}{% static 'placeholder.jpg' %}{% endif %}" preload="metadata">
+                    <!-- Video source will be added dynamically via JavaScript -->
                 </video>
                 
                 <div class="video-overlays">
@@ -58,7 +57,7 @@
                                 <div class="time-display">
                                     <span id="current-time">0:00</span>
                                     <span>/</span>
-                                    <span id="duration">0:00</span>
+                                    <span id="duration">{{ video.duration|default:"0:00" }}</span>
                                 </div>
                             </div>
                             
@@ -95,7 +94,7 @@
                 </div>
                 
                 <div class="loading-spinner" id="loading-spinner">
-                    {% comment %} <div class="spinner"></div> {% endcomment %}
+                    <div class="spinner"></div>
                 </div>
             </div>
             
@@ -247,7 +246,9 @@
 {% endblock %}
 
 {% block scripts %}
-<script>document.addEventListener('DOMContentLoaded', function() {
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Get player elements
     const videoPlayer = document.getElementById('video-player');
     const playPauseBtn = document.getElementById('play-pause-btn');
     const playBigBtn = document.getElementById('play-big-btn');
@@ -275,79 +276,18 @@
     const qualityOptionsElements = document.querySelectorAll('.quality-option');
     const loadingSpinner = document.getElementById('loading-spinner');
     const videoContainer = document.querySelector('.video-container');
-    const videoTitle = document.querySelector('.video-title');
     
-    // Оптимизация загрузки видео
-    if (videoPlayer) {
-        // Устанавливаем приоритет загрузки (только метаданные, затем контент)
-        videoPlayer.preload = 'metadata';
-        
-        // Уменьшаем время для начала воспроизведения
-        videoPlayer.addEventListener('loadedmetadata', function() {
-            // Предварительно буферизуем первые несколько секунд
-            if (videoPlayer.buffered.length === 0 || videoPlayer.buffered.end(0) < 5) {
-                videoPlayer.currentTime = 0.1; // Немного перематываем для начала буферизации
-                setTimeout(() => {
-                    // Возвращаемся к началу после буферизации
-                    videoPlayer.currentTime = 0;
-                    // Скрываем спиннер загрузки
-                    loadingSpinner.classList.remove('visible');
-                }, 500);
-            } else {
-                loadingSpinner.classList.remove('visible');
-            }
-            
-            // Задаем длительность видео
-            durationDisplay.textContent = formatTime(videoPlayer.duration);
-        });
-    }
+    // Early exit if the video player doesn't exist
+    if (!videoPlayer) return;
     
-    // Симуляция загрузки видео
+    // Get video id and user id from the container data attributes
+    const videoId = videoContainer.getAttribute('data-video-id');
+    const userId = videoContainer.getAttribute('data-user-id');
+    
+    // Show loading spinner
     loadingSpinner.classList.add('visible');
-    setTimeout(() => {
-        loadingSpinner.classList.remove('visible');
-    }, 1000); // Уменьшил время отображения спиннера
     
-    // Обработчики событий для видео
-    videoPlayer.addEventListener('loadedmetadata', function() {
-        durationDisplay.textContent = formatTime(videoPlayer.duration);
-    });
-    
-    videoPlayer.addEventListener('timeupdate', function() {
-        currentTimeDisplay.textContent = formatTime(videoPlayer.currentTime);
-        const progress = (videoPlayer.currentTime / videoPlayer.duration) * 100;
-        progressBar.style.width = `${progress}%`;
-    });
-    
-    videoPlayer.addEventListener('progress', function() {
-        if (videoPlayer.buffered.length > 0) {
-            const bufferedEnd = videoPlayer.buffered.end(videoPlayer.buffered.length - 1);
-            const duration = videoPlayer.duration;
-            const bufferedPercent = (bufferedEnd / duration) * 100;
-            bufferBar.style.width = `${bufferedPercent}%`;
-        }
-    });
-    
-    videoPlayer.addEventListener('waiting', function() {
-        loadingSpinner.classList.add('visible');
-    });
-    
-    videoPlayer.addEventListener('playing', function() {
-        loadingSpinner.classList.remove('visible');
-        updatePlayPauseIcon(true);
-    });
-    
-    videoPlayer.addEventListener('pause', function() {
-        updatePlayPauseIcon(false);
-        playBigBtn.classList.add('visible');
-    });
-    
-    videoPlayer.addEventListener('ended', function() {
-        updatePlayPauseIcon(false);
-        playBigBtn.classList.add('visible');
-    });
-    
-    // Функция для форматирования времени
+    // Format time function
     function formatTime(seconds) {
         if (isNaN(seconds)) return "0:00";
         
@@ -356,7 +296,7 @@
         return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
     }
     
-    // Функция для обновления иконки воспроизведения/паузы
+    // Update play/pause icon function
     function updatePlayPauseIcon(isPlaying) {
         if (isPlaying) {
             playPauseBtn.innerHTML = `
@@ -379,10 +319,11 @@
                 </svg>
             `;
             playBigBtn.innerHTML = `<div class="play-icon"></div>`;
+            playBigBtn.classList.add('visible');
         }
     }
     
-    // Функция воспроизведения/паузы
+    // Toggle play/pause function
     function togglePlay() {
         if (videoPlayer.paused) {
             videoPlayer.play();
@@ -391,28 +332,7 @@
         }
     }
     
-    // Обработчики кнопок воспроизведения/паузы
-    playPauseBtn.addEventListener('click', togglePlay);
-    playBigBtn.addEventListener('click', togglePlay);
-    videoPlayer.addEventListener('click', togglePlay);
-    
-    // Обработка прогресс-бара
-    progressContainer.addEventListener('click', function(e) {
-        const rect = progressContainer.getBoundingClientRect();
-        const position = (e.clientX - rect.left) / rect.width;
-        videoPlayer.currentTime = position * videoPlayer.duration;
-    });
-    
-    // Обработка регулятора громкости
-    volumeBar.addEventListener('click', function(e) {
-        const rect = volumeBar.getBoundingClientRect();
-        const position = (e.clientX - rect.left) / rect.width;
-        videoPlayer.volume = position;
-        volumeLevel.style.width = `${position * 100}%`;
-        updateVolumeIcon();
-    });
-    
-    // Обновление иконки громкости
+    // Update volume icon function
     function updateVolumeIcon() {
         if (videoPlayer.muted || videoPlayer.volume === 0) {
             volumeBtn.innerHTML = `
@@ -440,18 +360,160 @@
         }
     }
     
-    // Обработчик кнопки громкости (вкл/выкл звук)
+    // Show error message function
+    function showErrorMessage(message) {
+        // Hide loading spinner
+        loadingSpinner.classList.remove('visible');
+        
+        // Create error message element
+        const errorElement = document.createElement('div');
+        errorElement.className = 'video-error-message';
+        errorElement.innerHTML = `
+            <div class="error-icon">⚠️</div>
+            <div class="error-text">${message}</div>
+            <button class="error-retry-btn">Повторить</button>
+        `;
+        
+        // Add retry functionality
+        const retryButton = errorElement.querySelector('.error-retry-btn');
+        if (retryButton) {
+            retryButton.addEventListener('click', function() {
+                errorElement.remove();
+                loadingSpinner.classList.add('visible');
+                fetchVideoUrl(videoId);
+            });
+        }
+        
+        // Add error message to video container
+        const videoWrapper = document.querySelector('.video-wrapper');
+        if (videoWrapper) {
+            videoWrapper.appendChild(errorElement);
+        }
+    }
+    
+    // Fetch video URL asynchronously
+    function fetchVideoUrl(videoId) {
+        fetch(`/api/get-video-url/${videoId}/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.url) {
+                    // Set video source and start loading
+                    const source = document.createElement('source');
+                    source.src = data.url;
+                    source.type = 'video/mp4';
+                    videoPlayer.appendChild(source);
+                    videoPlayer.load();
+                } else {
+                    console.error('Error loading video:', data.error || 'Unknown error');
+                    showErrorMessage('Не удалось загрузить видео. Пожалуйста, попробуйте позже.');
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching video URL:', error);
+                showErrorMessage('Ошибка при загрузке видео. Проверьте соединение с интернетом.');
+            });
+    }
+    
+    // ===== Event listeners =====
+    
+    // Metadata loaded - hide spinner and update duration
+    videoPlayer.addEventListener('loadedmetadata', function() {
+        durationDisplay.textContent = formatTime(videoPlayer.duration);
+        loadingSpinner.classList.remove('visible');
+    });
+    
+    // Time update - update progress bar and current time
+    videoPlayer.addEventListener('timeupdate', function() {
+        currentTimeDisplay.textContent = formatTime(videoPlayer.currentTime);
+        const progress = (videoPlayer.currentTime / videoPlayer.duration) * 100;
+        progressBar.style.width = `${progress}%`;
+    });
+    
+    // Video progress (buffering) handler
+    videoPlayer.addEventListener('progress', function() {
+        if (videoPlayer.buffered.length > 0) {
+            const bufferedEnd = videoPlayer.buffered.end(videoPlayer.buffered.length - 1);
+            const duration = videoPlayer.duration;
+            if (duration > 0) {
+                const bufferedPercent = (bufferedEnd / duration) * 100;
+                bufferBar.style.width = `${bufferedPercent}%`;
+            }
+        }
+    });
+    
+    // Video waiting handler - show spinner
+    videoPlayer.addEventListener('waiting', function() {
+        loadingSpinner.classList.add('visible');
+    });
+    
+    // Video playing handler - hide spinner and update play icon
+    videoPlayer.addEventListener('playing', function() {
+        loadingSpinner.classList.remove('visible');
+        updatePlayPauseIcon(true);
+    });
+    
+    // Video paused handler - update play icon
+    videoPlayer.addEventListener('pause', function() {
+        updatePlayPauseIcon(false);
+    });
+    
+    // Video ended handler - show play icon
+    videoPlayer.addEventListener('ended', function() {
+        updatePlayPauseIcon(false);
+    });
+    
+    // Play/pause button handler
+    playPauseBtn.addEventListener('click', togglePlay);
+    
+    // Big play button handler
+    playBigBtn.addEventListener('click', function() {
+        togglePlay();
+    });
+    
+    // Video player click handler
+    videoPlayer.addEventListener('click', function(e) {
+        // Only toggle if not clicking on controls
+        if (e.target === videoPlayer) {
+            togglePlay();
+        }
+    });
+    
+    // Progress bar click handler
+    progressContainer.addEventListener('click', function(e) {
+        if (!videoPlayer.duration) return; // Don't do anything if duration is not available
+        
+        const rect = progressContainer.getBoundingClientRect();
+        const position = (e.clientX - rect.left) / rect.width;
+        videoPlayer.currentTime = position * videoPlayer.duration;
+    });
+    
+    // Volume bar click handler
+    volumeBar.addEventListener('click', function(e) {
+        const rect = volumeBar.getBoundingClientRect();
+        const position = (e.clientX - rect.left) / rect.width;
+        videoPlayer.volume = Math.max(0, Math.min(1, position));
+        volumeLevel.style.width = `${videoPlayer.volume * 100}%`;
+        
+        // Unmute if volume is set manually
+        if (videoPlayer.muted && videoPlayer.volume > 0) {
+            videoPlayer.muted = false;
+        }
+        
+        updateVolumeIcon();
+    });
+    
+    // Volume button click handler (mute/unmute)
     volumeBtn.addEventListener('click', function() {
         videoPlayer.muted = !videoPlayer.muted;
         if (videoPlayer.muted) {
-            volumeLevel.style.width = '0%';
+            volumeLevel.style.width = '0';
         } else {
             volumeLevel.style.width = `${videoPlayer.volume * 100}%`;
         }
         updateVolumeIcon();
     });
     
-    // Обработчик полноэкранного режима
+    // Fullscreen button click handler
     fullscreenBtn.addEventListener('click', function() {
         if (document.fullscreenElement) {
             document.exitFullscreen();
@@ -460,7 +522,7 @@
         }
     });
     
-    // Обработчик режима "Картинка в картинке"
+    // PiP button click handler
     pipBtn.addEventListener('click', function() {
         if (document.pictureInPictureElement) {
             document.exitPictureInPicture();
@@ -469,13 +531,13 @@
         }
     });
     
-    // Обработчик меню настроек
+    // Settings button click handler
     settingsBtn.addEventListener('click', function(e) {
         e.stopPropagation();
         settingsMenu.classList.toggle('active');
     });
     
-    // Закрытие меню настроек при клике вне его
+    // Close settings menu when clicking outside
     document.addEventListener('click', function(e) {
         if (!settingsMenu.contains(e.target) && e.target !== settingsBtn) {
             settingsMenu.classList.remove('active');
@@ -484,12 +546,13 @@
         }
     });
     
-    // Обработчики подменю скорости воспроизведения
+    // Playback speed menu handler
     playbackSpeedItem.addEventListener('click', function() {
         playbackSpeedOptions.classList.toggle('active');
         qualityOptions.classList.remove('active');
     });
     
+    // Playback speed options handlers
     speedOptions.forEach(option => {
         option.addEventListener('click', function() {
             const speed = parseFloat(option.getAttribute('data-speed'));
@@ -503,12 +566,13 @@
         });
     });
     
-    // Обработчики подменю качества
+    // Quality menu handler
     qualityItem.addEventListener('click', function() {
         qualityOptions.classList.toggle('active');
         playbackSpeedOptions.classList.remove('active');
     });
     
+    // Quality options handlers
     qualityOptionsElements.forEach(option => {
         option.addEventListener('click', function() {
             const quality = option.getAttribute('data-quality');
@@ -519,19 +583,20 @@
             });
             option.classList.add('active');
             
-            // Симуляция смены качества видео
-            console.log(`Качество изменено на ${quality}`);
+            // For demo, just show a message about quality change
+            console.log(`Quality changed to ${quality}`);
         });
     });
     
-    // Обработчик опции повтора
+    // Loop toggle handler
     loopItem.addEventListener('click', function() {
         videoPlayer.loop = !videoPlayer.loop;
         loopStatus.textContent = videoPlayer.loop ? 'Вкл' : 'Выкл';
     });
     
-    // Обработчик для клавиатурного управления
+    // Keyboard controls
     document.addEventListener('keydown', function(e) {
+        // Skip if focus is on an input element
         if (document.activeElement.tagName === 'INPUT') return;
         
         switch (e.key) {
@@ -545,7 +610,7 @@
                 e.preventDefault();
                 break;
             case 'ArrowRight':
-                videoPlayer.currentTime = Math.min(videoPlayer.duration, videoPlayer.currentTime + 5);
+                videoPlayer.currentTime = Math.min(videoPlayer.duration || 0, videoPlayer.currentTime + 5);
                 e.preventDefault();
                 break;
             case 'f':
@@ -554,6 +619,11 @@
                 break;
             case 'm':
                 videoPlayer.muted = !videoPlayer.muted;
+                if (videoPlayer.muted) {
+                    volumeLevel.style.width = '0';
+                } else {
+                    volumeLevel.style.width = `${videoPlayer.volume * 100}%`;
+                }
                 updateVolumeIcon();
                 e.preventDefault();
                 break;
@@ -567,21 +637,29 @@
             case '7':
             case '8':
             case '9':
-                const percent = parseInt(e.key) * 10;
-                videoPlayer.currentTime = videoPlayer.duration * (percent / 100);
-                e.preventDefault();
+                if (videoPlayer.duration) {
+                    const percent = parseInt(e.key) * 10;
+                    videoPlayer.currentTime = videoPlayer.duration * (percent / 100);
+                    e.preventDefault();
+                }
                 break;
         }
     });
     
-    // Инициализация начальных состояний
+    // Initialize UI states
     updateVolumeIcon();
     volumeLevel.style.width = `${videoPlayer.volume * 100}%`;
     
-    // Track video views
+    // Initialize async video loading
+    if (videoId) {
+        fetchVideoUrl(videoId);
+    } else {
+        showErrorMessage('Ошибка: Не найден идентификатор видео');
+    }
+    
+    // Track view after 5 seconds of playback
     let viewTracked = false;
     videoPlayer.addEventListener('timeupdate', function() {
-        // Track view after 5 seconds of playback
         if (!viewTracked && videoPlayer.currentTime > 5) {
             viewTracked = true;
             console.log('View tracked');
@@ -589,51 +667,7 @@
         }
     });
     
-    // Add comment functionality
-    const commentInput = document.querySelector('.comment-form input');
-    if (commentInput) {
-        commentInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && this.value.trim() !== '') {
-                console.log('Comment submitted:', this.value);
-                // In a real app, you would make an AJAX request to save the comment
-                
-                // For demo, show a mock comment
-                const commentsList = document.querySelector('.comments-list');
-                if (commentsList) {
-                    // Create a new comment element
-                    const newComment = document.createElement('div');
-                    newComment.className = 'comment';
-                    newComment.innerHTML = `
-                        <div class="comment-avatar">${document.querySelector('.user-avatar').textContent}</div>
-                        <div class="comment-content">
-                            <div class="comment-author">${document.querySelector('.user-avatar').textContent}</div>
-                            <div class="comment-text">${this.value}</div>
-                            <div class="comment-meta">Только что</div>
-                            <div class="comment-actions">
-                                <button class="comment-like">👍 <span>0</span></button>
-                                <button class="comment-dislike">👎</button>
-                                <button class="comment-reply">Ответить</button>
-                            </div>
-                        </div>
-                    `;
-                    
-                    // If there's the demo comment, remove it
-                    const demoComment = commentsList.querySelector('.comment-author:contains("KRONIK")');
-                    if (demoComment) {
-                        demoComment.closest('.comment').remove();
-                    }
-                    
-                    // Insert at the top of the list
-                    commentsList.insertBefore(newComment, commentsList.firstChild);
-                    
-                    // Clear the input
-                    this.value = '';
-                }
-            }
-        });
-    }
-    
-    // Like/dislike functionality
+    // Like/dislike buttons functionality
     const likeButton = document.getElementById('likeButton');
     const dislikeButton = document.getElementById('dislikeButton');
     const likeCount = document.getElementById('likeCount');
@@ -675,6 +709,71 @@
                 }
             }
         });
+    }
+    
+    // Comment functionality
+    const commentInput = document.querySelector('.comment-form input');
+    if (commentInput) {
+        commentInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && this.value.trim() !== '') {
+                // In a real app, you would make an AJAX request to save the comment
+                // For demo purposes, we'll just add it to the DOM
+                addNewComment(this.value);
+                this.value = '';
+            }
+        });
+    }
+    
+    // Function to add a new comment to the DOM
+    function addNewComment(text) {
+        const commentsList = document.querySelector('.comments-list');
+        if (commentsList) {
+            // Get current user details
+            const userAvatar = document.querySelector('.user-avatar');
+            const userInitial = userAvatar ? userAvatar.textContent : 'U';
+            
+            // Create a new comment element
+            const newComment = document.createElement('div');
+            newComment.className = 'comment';
+            newComment.innerHTML = `
+                <div class="comment-avatar">${userInitial}</div>
+                <div class="comment-content">
+                    <div class="comment-author">Вы</div>
+                    <div class="comment-text">${text}</div>
+                    <div class="comment-meta">Только что</div>
+                    <div class="comment-actions">
+                        <button class="comment-like">👍 <span>0</span></button>
+                        <button class="comment-dislike">👎</button>
+                        <button class="comment-reply">Ответить</button>
+                    </div>
+                </div>
+            `;
+            
+            // Add comment interaction functionality
+            const likeBtn = newComment.querySelector('.comment-like');
+            if (likeBtn) {
+                likeBtn.addEventListener('click', function() {
+                    const countSpan = this.querySelector('span');
+                    const currentCount = parseInt(countSpan.textContent);
+                    if (this.classList.contains('active')) {
+                        this.classList.remove('active');
+                        countSpan.textContent = currentCount - 1;
+                    } else {
+                        this.classList.add('active');
+                        countSpan.textContent = currentCount + 1;
+                    }
+                });
+            }
+            
+            // Check if there's a placeholder comment from KRONIK
+            const kronikComment = commentsList.querySelector('.comment-author:contains("KRONIK")');
+            if (kronikComment) {
+                kronikComment.closest('.comment').remove();
+            }
+            
+            // Insert at the top of the list
+            commentsList.insertBefore(newComment, commentsList.firstChild);
+        }
     }
 });
 </script>

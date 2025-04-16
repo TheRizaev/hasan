@@ -1,64 +1,307 @@
-
 {% extends 'main/base.html' %}
 {% load static %}
 
-{% block title %}Results - KRONIK{% endblock %}
+{% block title %}{{ query }} - Результаты поиска - KRONIK{% endblock %}
 
 {% block content %}
 <div class="search-results-container">
     <h1 class="search-heading">Результаты поиска: <span class="search-query">{{ query }}</span></h1>
     
     <div class="search-filter">
-        <div class="filter-item active">Все</div>
-        <div class="filter-item">Видео</div>
-        <div class="filter-item">Курсы</div>
-        <div class="filter-item">Каналы</div>
+        <div class="filter-item active" data-filter="all">Все</div>
+        <div class="filter-item" data-filter="videos">Видео</div>
+        <div class="filter-item" data-filter="courses">Курсы</div>
+        <div class="filter-item" data-filter="channels">Каналы</div>
     </div>
     
-    <div class="search-results-list">
-        {% for video in videos %}
-        <div class="search-result-item" onclick="window.location.href = '/video/{{ video.user_id }}__{{ video.video_id }}/'">
-            <div class="result-thumbnail">
-                {% if video.thumbnail_url %}
-                    <img src="{{ video.thumbnail_url }}" alt="{{ video.title }}" loading="lazy" onerror="this.src='{% static 'placeholder.jpg' %}'">
-                {% else %}
-                    <img src="{% static 'placeholder.jpg' %}" alt="{{ video.title }}" loading="lazy">
-                {% endif %}
-                <div class="result-duration">{{ video.duration }}</div>
-            </div>
-            <div class="result-details">
-                <h3 class="result-title">{{ video.title }}</h3>
-                <div class="result-meta">{{ video.views_formatted }} • {{ video.upload_date_formatted|default:"Недавно" }}</div>
-                <div class="result-channel">
-                    <div class="channel-avatar">{{ video.display_name|first|default:video.channel|first }}</div>
-                    <div class="channel-name">{{ video.display_name|default:video.channel }}</div>
+    <div class="search-results-list" id="search-results-container">
+        {% if videos %}
+            {% for video in videos %}
+            <div class="search-result-item" data-type="videos" onclick="window.location.href = '/video/{{ video.user_id }}__{{ video.video_id }}/'">
+                <div class="result-thumbnail">
+                    {% if video.thumbnail_url %}
+                        <img src="{{ video.thumbnail_url }}" alt="{{ video.title }}" loading="lazy" onerror="this.src='{% static 'placeholder.jpg' %}'">
+                    {% else %}
+                        <img src="{% static 'placeholder.jpg' %}" alt="{{ video.title }}" loading="lazy" data-user-id="{{ video.user_id }}" data-video-id="{{ video.video_id }}" class="lazy-thumbnail">
+                    {% endif %}
+                    <div class="result-duration">{{ video.duration|default:"00:00" }}</div>
                 </div>
-                <div class="result-description">
-                    {{ video.description|truncatechars:150 }}
+                <div class="result-details">
+                    <h3 class="result-title">{{ video.title }}</h3>
+                    <div class="result-meta">{{ video.views_formatted|default:"0 просмотров" }} • {{ video.upload_date_formatted|default:"Недавно" }}</div>
+                    <div class="result-channel">
+                        <div class="channel-avatar">{{ video.display_name|first|default:video.channel|first }}</div>
+                        <div class="channel-name">{{ video.display_name|default:video.channel }}</div>
+                    </div>
+                    <div class="result-description">
+                        {{ video.description|default:""|truncatechars:150 }}
+                    </div>
                 </div>
             </div>
-        </div>
-        {% empty %}
-        <div class="no-results">
-            <h3>По запросу "{{ query }}" ничего не найдено</h3>
-            <p>Попробуйте изменить запрос или выбрать другую категорию</p>
-        </div>
-        {% endfor %}
+            {% endfor %}
+        {% else %}
+            <div class="no-results">
+                <h3>По запросу "{{ query }}" ничего не найдено</h3>
+                <p>Попробуйте изменить запрос или выбрать другую категорию</p>
+                <div class="search-suggestions">
+                    <h4>Возможно, вас заинтересует:</h4>
+                    <div class="suggestion-tags">
+                        <a href="/search?query=программирование" class="suggestion-tag">программирование</a>
+                        <a href="/search?query=математика" class="suggestion-tag">математика</a>
+                        <a href="/search?query=физика" class="suggestion-tag">физика</a>
+                        <a href="/search?query=история" class="suggestion-tag">история</a>
+                        <a href="/search?query=уроки" class="suggestion-tag">уроки</a>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
     </div>
+    
+    {% if videos|length == 20 %}
+    <div class="load-more-container">
+        <button id="load-more-btn" class="load-more-button">Загрузить ещё</button>
+    </div>
+    {% endif %}
 </div>
+
+<style>
+    /* Additional styles for search results page */
+    .search-suggestions {
+        margin-top: 20px;
+        padding: 15px;
+        background-color: rgba(159, 37, 88, 0.05);
+        border-radius: 8px;
+    }
+    
+    .dark-theme .search-suggestions {
+        background-color: rgba(159, 37, 88, 0.1);
+    }
+    
+    .suggestion-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 10px;
+    }
+    
+    .suggestion-tag {
+        padding: 8px 15px;
+        background-color: rgba(159, 37, 88, 0.1);
+        border-radius: 20px;
+        color: var(--primary-color);
+        text-decoration: none;
+        transition: all 0.3s;
+    }
+    
+    .suggestion-tag:hover {
+        background-color: rgba(159, 37, 88, 0.2);
+        transform: translateY(-2px);
+    }
+    
+    .load-more-container {
+        display: flex;
+        justify-content: center;
+        margin: 30px 0;
+    }
+    
+    .load-more-button {
+        padding: 10px 25px;
+        background-color: var(--accent-color);
+        color: white;
+        border: none;
+        border-radius: 30px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    
+    .load-more-button:hover {
+        background-color: #7d1e46;
+        transform: translateY(-3px);
+        box-shadow: 0 5px 15px rgba(159, 37, 88, 0.3);
+    }
+    
+    /* Fix for lazy loaded thumbnails */
+    .lazy-thumbnail {
+        transition: opacity 0.3s;
+    }
+    
+    .lazy-thumbnail.loading {
+        opacity: 0.5;
+    }
+</style>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Настройка фильтров поиска
+        // Setup filter functionality
         const filterItems = document.querySelectorAll('.filter-item');
+        const resultItems = document.querySelectorAll('.search-result-item');
         
         filterItems.forEach(item => {
             item.addEventListener('click', function() {
-                filterItems.forEach(i => i.classList.remove('active'));
+                // Remove active class from all filters
+                filterItems.forEach(filter => filter.classList.remove('active'));
+                
+                // Add active class to selected filter
                 this.classList.add('active');
-                // Здесь может быть код для фильтрации результатов
+                
+                // Get filter type
+                const filterType = this.getAttribute('data-filter');
+                
+                // Show/hide results based on filter
+                resultItems.forEach(result => {
+                    if (filterType === 'all' || result.getAttribute('data-type') === filterType) {
+                        result.style.display = 'flex';
+                    } else {
+                        result.style.display = 'none';
+                    }
+                });
             });
         });
+        
+        // Initialize lazy loading for thumbnails
+        initializeLazyLoading();
+        
+        // Setup load more functionality
+        const loadMoreBtn = document.getElementById('load-more-btn');
+        let currentOffset = {{ videos|length }};
+        
+        if (loadMoreBtn) {
+            loadMoreBtn.addEventListener('click', function() {
+                this.textContent = 'Загрузка...';
+                this.disabled = true;
+                
+                // Fetch more results
+                fetch(`/search?query={{ query }}&offset=${currentOffset}&format=json`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.videos && data.videos.length > 0) {
+                            // Append new results
+                            appendSearchResults(data.videos);
+                            
+                            // Update offset
+                            currentOffset += data.videos.length;
+                            
+                            // Re-enable button if there are more results
+                            if (data.videos.length < 20) {
+                                loadMoreBtn.style.display = 'none';
+                            } else {
+                                loadMoreBtn.textContent = 'Загрузить ещё';
+                                loadMoreBtn.disabled = false;
+                            }
+                            
+                            // Re-initialize lazy loading
+                            initializeLazyLoading();
+                        } else {
+                            loadMoreBtn.style.display = 'none';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading more results:', error);
+                        loadMoreBtn.textContent = 'Ошибка загрузки';
+                        setTimeout(() => {
+                            loadMoreBtn.textContent = 'Попробовать снова';
+                            loadMoreBtn.disabled = false;
+                        }, 2000);
+                    });
+            });
+        }
+        
+        // Function to append new search results
+        function appendSearchResults(videos) {
+            const container = document.getElementById('search-results-container');
+            
+            videos.forEach(video => {
+                const resultItem = document.createElement('div');
+                resultItem.className = 'search-result-item';
+                resultItem.setAttribute('data-type', 'videos');
+                resultItem.onclick = function() {
+                    window.location.href = `/video/${video.user_id}__${video.video_id}/`;
+                };
+                
+                const thumbnailUrl = video.thumbnail_url || '/static/placeholder.jpg';
+                const displayName = video.display_name || video.channel || 'Unknown';
+                const firstLetter = displayName.charAt(0);
+                
+                resultItem.innerHTML = `
+                    <div class="result-thumbnail">
+                        <img src="${thumbnailUrl}" alt="${video.title}" loading="lazy" onerror="this.src='/static/placeholder.jpg'" ${!video.thumbnail_url ? `data-user-id="${video.user_id}" data-video-id="${video.video_id}" class="lazy-thumbnail"` : ''}>
+                        <div class="result-duration">${video.duration || '00:00'}</div>
+                    </div>
+                    <div class="result-details">
+                        <h3 class="result-title">${video.title}</h3>
+                        <div class="result-meta">${video.views_formatted || '0 просмотров'} • ${video.upload_date_formatted || 'Недавно'}</div>
+                        <div class="result-channel">
+                            <div class="channel-avatar">${firstLetter}</div>
+                            <div class="channel-name">${displayName}</div>
+                        </div>
+                        <div class="result-description">
+                            ${video.description ? (video.description.length > 150 ? video.description.substring(0, 147) + '...' : video.description) : ''}
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(resultItem);
+            });
+        }
+        
+        // Function to initialize lazy loading for thumbnails
+        function initializeLazyLoading() {
+            if ('IntersectionObserver' in window) {
+                const imageObserver = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            const img = entry.target;
+                            const videoId = img.getAttribute('data-video-id');
+                            const userId = img.getAttribute('data-user-id');
+                            
+                            if (videoId && userId) {
+                                // Check if URL is in session storage
+                                const cachedUrl = sessionStorage.getItem(`thumbnail_${userId}__${videoId}`);
+                                
+                                if (cachedUrl) {
+                                    img.src = cachedUrl;
+                                    img.classList.remove('lazy-thumbnail', 'loading');
+                                    imageObserver.unobserve(img);
+                                } else {
+                                    // Mark as loading
+                                    img.classList.add('loading');
+                                    
+                                    // Fetch thumbnail URL
+                                    fetch(`/api/get-thumbnail-url/${userId}__${videoId}/`)
+                                        .then(response => response.json())
+                                        .then(data => {
+                                            if (data.success && data.url) {
+                                                // Cache URL
+                                                sessionStorage.setItem(`thumbnail_${userId}__${videoId}`, data.url);
+                                                
+                                                // Set image source
+                                                img.src = data.url;
+                                                img.classList.remove('lazy-thumbnail', 'loading');
+                                                
+                                                // Stop observing
+                                                imageObserver.unobserve(img);
+                                            }
+                                        })
+                                        .catch(error => {
+                                            console.error('Error loading thumbnail:', error);
+                                            img.classList.remove('loading');
+                                        });
+                                }
+                            }
+                        }
+                    });
+                }, {
+                    rootMargin: '200px 0px',
+                    threshold: 0.01
+                });
+                
+                // Observe all lazy thumbnails
+                document.querySelectorAll('.lazy-thumbnail').forEach(img => {
+                    imageObserver.observe(img);
+                });
+            }
+        }
     });
 </script>
 {% endblock %}

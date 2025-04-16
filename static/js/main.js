@@ -153,40 +153,101 @@ function handleScroll() {
     }, 100);
 }
 
-// Функция для поиска видео
-function searchVideos(query) {
-    if (!query.trim() || !videoData.length) return [];
+function showPopularSearchTerms(terms, searchDropdown) {
+    if (!searchDropdown) return;
     
-    query = query.toLowerCase();
-    return videoData.filter(video => 
-        (video.title && video.title.toLowerCase().includes(query)) || 
-        (video.display_name && video.display_name.toLowerCase().includes(query)) ||
-        (video.channel && video.channel.toLowerCase().includes(query)) ||
-        (video.user_id && video.user_id.toLowerCase().includes(query))
-    );
+    searchDropdown.innerHTML = '';
+    
+    // Create a header for popular terms
+    const header = document.createElement('div');
+    header.className = 'search-header';
+    header.textContent = 'Популярные запросы';
+    searchDropdown.appendChild(header);
+    
+    // Add each popular term
+    terms.forEach(term => {
+        const termItem = document.createElement('div');
+        termItem.className = 'search-term';
+        termItem.innerHTML = `
+            <div class="search-term-icon">🔍</div>
+            <div class="search-term-text">${term}</div>
+        `;
+        
+        termItem.addEventListener('click', function() {
+            // Set the search input to this term and redirect to search
+            const searchInput = document.getElementById('search-input');
+            if (searchInput) {
+                searchInput.value = term;
+                window.location.href = `/search?query=${encodeURIComponent(term)}`;
+            }
+        });
+        
+        searchDropdown.appendChild(termItem);
+    });
+    
+    searchDropdown.classList.add('show');
 }
 
 // Функция для отображения результатов поиска в выпадающем списке
-function showSearchResults(results, searchDropdown) {
+function showSearchResults(results, searchDropdown, query) {
     if (!searchDropdown) return;
     
     searchDropdown.innerHTML = '';
     
     if (results.length === 0) {
-        searchDropdown.classList.remove('show');
+        // If no results, show a message and popular search terms
+        const noResults = document.createElement('div');
+        noResults.className = 'search-no-results';
+        noResults.textContent = `Нет результатов для "${query}"`;
+        searchDropdown.appendChild(noResults);
+        
+        // Create a "perform search" item
+        const searchAllItem = document.createElement('div');
+        searchAllItem.className = 'search-all-item';
+        searchAllItem.innerHTML = `
+            <div class="search-all-icon">🔍</div>
+            <div class="search-all-text">Искать <strong>${query}</strong></div>
+        `;
+        
+        searchAllItem.addEventListener('click', function() {
+            window.location.href = `/search?query=${encodeURIComponent(query)}`;
+        });
+        
+        searchDropdown.appendChild(searchAllItem);
+        searchDropdown.classList.add('show');
         return;
     }
     
-    // Ограничиваем количество результатов для выпадающего списка
+    // First, add a "search for" item at the top
+    const searchItem = document.createElement('div');
+    searchItem.className = 'search-term';
+    searchItem.innerHTML = `
+        <div class="search-term-icon">🔍</div>
+        <div class="search-term-text">Искать <strong>${query}</strong></div>
+    `;
+    
+    searchItem.addEventListener('click', function() {
+        window.location.href = `/search?query=${encodeURIComponent(query)}`;
+    });
+    
+    searchDropdown.appendChild(searchItem);
+    
+    // Then add video results
+    const resultsHeader = document.createElement('div');
+    resultsHeader.className = 'search-header';
+    resultsHeader.textContent = 'Видео';
+    searchDropdown.appendChild(resultsHeader);
+    
+    // Limit the number of results for the dropdown
     const displayResults = results.slice(0, 5);
     
     displayResults.forEach(video => {
-        // Определяем путь к превью, с запасным вариантом
+        // Determine the path to the preview, with a fallback
         const previewPath = video.thumbnail_url ? 
             video.thumbnail_url : 
             `/static/placeholder.jpg`;
         
-        // Определяем имя канала для отображения
+        // Determine the channel name for display
         const channelName = video.display_name || video.channel || video.user_id || '';
             
         const resultItem = document.createElement('div');
@@ -208,7 +269,7 @@ function showSearchResults(results, searchDropdown) {
         searchDropdown.appendChild(resultItem);
     });
     
-    // Если есть больше результатов, добавляем ссылку "Показать все результаты"
+    // If there are more results, add a link to "Show all results"
     if (results.length > 5) {
         const showMore = document.createElement('div');
         showMore.className = 'search-more';
@@ -217,7 +278,7 @@ function showSearchResults(results, searchDropdown) {
         showMore.addEventListener('click', function() {
             const searchInput = document.getElementById('search-input');
             if (searchInput) {
-                // Перенаправление на страницу результатов поиска
+                // Redirect to search results page
                 window.location.href = `/search?query=${encodeURIComponent(searchInput.value)}`;
             }
         });
@@ -228,6 +289,20 @@ function showSearchResults(results, searchDropdown) {
     searchDropdown.classList.add('show');
 }
 
+// Function to search for videos locally
+function searchVideos(query) {
+    if (!query.trim() || !videoData || !videoData.length) return [];
+    
+    query = query.toLowerCase();
+    return videoData.filter(video => 
+        (video.title && video.title.toLowerCase().includes(query)) || 
+        (video.display_name && video.display_name.toLowerCase().includes(query)) ||
+        (video.channel && video.channel.toLowerCase().includes(query)) ||
+        (video.description && video.description.toLowerCase().includes(query)) ||
+        (video.user_id && video.user_id.toLowerCase().includes(query))
+    );
+}
+
 // Функция для настройки поиска
 function setupSearch() {
     const searchInput = document.getElementById('search-input');
@@ -236,30 +311,46 @@ function setupSearch() {
     
     if (!searchInput || !searchDropdown) return;
     
-    // Дебаунсинг для поиска при вводе
+    // Popular search terms (these could come from the backend in a real implementation)
+    const popularSearchTerms = [
+        "Программирование Python",
+        "Математический анализ",
+        "Основы физики",
+        "Химические эксперименты",
+        "История цивилизаций"
+    ];
+    
+    // Debouncing for search while typing
     let searchTimeout;
     searchInput.addEventListener('input', function() {
         if (searchTimeout) clearTimeout(searchTimeout);
         
-        const query = this.value;
+        const query = this.value.trim();
         
-        // Если запрос пустой, скрываем результаты
-        if (!query.trim()) {
-            searchDropdown.classList.remove('show');
+        // If query is empty, show popular search terms
+        if (!query) {
+            showPopularSearchTerms(popularSearchTerms, searchDropdown);
             return;
         }
         
-        // Задержка перед поиском, чтобы не перегружать систему
+        // Add delay before search to not overload the system
         searchTimeout = setTimeout(() => {
+            // First show local results (from cached videos)
             const results = searchVideos(query);
-            showSearchResults(results, searchDropdown);
+            showSearchResults(results, searchDropdown, query);
+            
+            // Then fetch additional results from server if needed
+            // In a real implementation, you could do a server-side search here
         }, 300);
     });
     
     searchInput.addEventListener('focus', function() {
-        if (this.value.trim()) {
-            const results = searchVideos(this.value);
-            showSearchResults(results, searchDropdown);
+        const query = this.value.trim();
+        if (!query) {
+            showPopularSearchTerms(popularSearchTerms, searchDropdown);
+        } else {
+            const results = searchVideos(query);
+            showSearchResults(results, searchDropdown, query);
         }
     });
     
