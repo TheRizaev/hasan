@@ -22,6 +22,7 @@ import uuid
 import logging
 import datetime
 import requests
+from django.http import JsonResponse
 logger = logging.getLogger(__name__)
 
 def custom_page_not_found(request, exception):
@@ -80,21 +81,21 @@ def index(request):
 
 def video_detail(request, video_id):
     """
-    Показывает подробную информацию о видео из GCS.
-    Оптимизированная версия с улучшенной обработкой отображаемых имен.
+    Shows detailed information about a video from GCS.
+    Optimized version with improved loading - fetches metadata first and loads the video asynchronously.
     
     Args:
         request: HTTP request
-        video_id: ID видео (строка в формате gcs_video_id)
+        video_id: ID video (string in format gcs_video_id)
     """
     try:
-        # Проверяем, содержит ли video_id информацию о пользователе
-        # Формат видео ID либо как username__video_id либо просто video_id
+        # Check if video_id contains user information
+        # Video ID format either username__video_id or just video_id
         if '__' in video_id:
-            # Если ID содержит разделитель, разбиваем его
+            # If ID contains a separator, split it
             user_id, gcs_video_id = video_id.split('__')
         else:
-            # Если старый формат или нет пользователя, ищем в метаданных всех видео
+            # If old format or no user, search in metadata of all videos
             gcs_video_id = video_id
             user_id = None
             
@@ -102,16 +103,16 @@ def video_detail(request, video_id):
             bucket = get_bucket(BUCKET_NAME)
             
             if bucket:
-                # Получаем список пользователей
+                # Get list of users
                 blobs = bucket.list_blobs(delimiter='/')
                 prefixes = list(blobs.prefixes)
                 users = [prefix.replace('/', '') for prefix in prefixes]
                 
-                # Ищем видео среди всех пользователей
+                # Look for the video among all users
                 from .gcs_storage import get_video_metadata
                 for user in users:
                     metadata = get_video_metadata(user, gcs_video_id)
-                    if metadata:  # Если нашли видео, используем этого пользователя
+                    if metadata:  # If we find the video, use this user
                         user_id = user
                         break
         
@@ -119,73 +120,54 @@ def video_detail(request, video_id):
             logger.error(f"Could not find user for video {gcs_video_id}")
             return render(request, 'main/404.html', status=404)
             
-        # Оптимизация: загружаем всю необходимую информацию параллельно
-        import concurrent.futures
-        from .gcs_storage import get_video_metadata, generate_video_url, get_video_comments, get_user_profile_from_gcs
+        # Fetch the metadata first - this is essential for displaying the page
+        from .gcs_storage import get_video_metadata, get_video_comments, get_user_profile_from_gcs
         
-        # Функции для параллельного выполнения
-        def fetch_metadata():
-            return get_video_metadata(user_id, gcs_video_id)
-            
-        def fetch_user_profile():
-            return get_user_profile_from_gcs(user_id)
-            
-        def fetch_comments():
-            return get_video_comments(user_id, gcs_video_id)
-            
-        # Выполняем запросы параллельно
-        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-            metadata_future = executor.submit(fetch_metadata)
-            profile_future = executor.submit(fetch_user_profile)
-            comments_future = executor.submit(fetch_comments)
-            
-            # Получаем результаты
-            metadata = metadata_future.result()
-            user_profile = profile_future.result()
-            comments_data = comments_future.result()
+        # Get video metadata
+        metadata = get_video_metadata(user_id, gcs_video_id)
         
         if not metadata:
             logger.error(f"Could not find metadata for video {gcs_video_id} from user {user_id}")
             return render(request, 'main/404.html', status=404)
         
-        # Получаем display_name пользователя для корректного отображения автора
+        # Fetch user profile for display name
+        user_profile = get_user_profile_from_gcs(user_id)
         display_name = user_profile.get('display_name', user_id.replace('@', '')) if user_profile else user_id.replace('@', '')
-            
-        # Получаем временный URL для видео
-        video_url = generate_video_url(user_id, gcs_video_id, expiration_time=3600)
         
-        # Получаем URL для превью, если оно есть
-        thumbnail_url = None
+        # Get comments
+        comments_data = get_video_comments(user_id, gcs_video_id)
+        
+        # Prepare video data without the actual video URL (will be fetched client-side)
+        video_data = {
+            'id': f"{user_id}__{gcs_video_id}",  # Composite ID for URL
+            'gcs_id': gcs_video_id,              # Original ID in GCS
+            'user_id': user_id,                  # User ID (owner)
+            'title': metadata.get('title', 'No title'),
+            'description': metadata.get('description', 'No description'),
+            'channel': display_name,             # Use display_name from profile
+            'display_name': display_name,        # Explicitly add display_name
+            'views': metadata.get('views', 0),
+            'views_formatted': f"{metadata.get('views', 0)} views",
+            'likes': metadata.get('likes', 0),
+            'dislikes': metadata.get('dislikes', 0),
+            'duration': metadata.get('duration', '00:00'),
+            # Don't set video_url here - it will be loaded asynchronously
+            # Format upload date
+            'upload_date': metadata.get('upload_date', ''),
+            'age': metadata.get('age_text', 'Recently')
+        }
+        
+        # Check if a thumbnail exists and add its path to the data
         if "thumbnail_path" in metadata:
-            thumbnail_url = generate_video_url(
+            from .gcs_storage import generate_video_url
+            video_data['thumbnail_url'] = generate_video_url(
                 user_id, 
                 gcs_video_id, 
                 file_path=metadata["thumbnail_path"], 
                 expiration_time=3600
             )
         
-        # Подготавливаем данные для шаблона
-        video_data = {
-            'id': f"{user_id}__{gcs_video_id}",  # Составной ID для URL
-            'gcs_id': gcs_video_id,              # Оригинальный ID в GCS
-            'user_id': user_id,                  # ID пользователя (владельца)
-            'title': metadata.get('title', 'Без названия'),
-            'description': metadata.get('description', 'Без описания'),
-            'channel': display_name,             # Используем display_name из профиля
-            'display_name': display_name,        # Явно добавляем display_name
-            'views': metadata.get('views', 0),
-            'views_formatted': f"{metadata.get('views', 0)} просмотров",
-            'likes': metadata.get('likes', 0),
-            'dislikes': metadata.get('dislikes', 0),
-            'duration': metadata.get('duration', '00:00'),
-            'video_url': video_url,
-            'thumbnail_url': thumbnail_url,
-            # Форматирование даты загрузки
-            'upload_date': metadata.get('upload_date', ''),
-            'age': metadata.get('age_text', 'Недавно')
-        }
-        
-        # Получаем рекомендуемые видео с помощью оптимизированной функции
+        # Get recommended videos using optimized function - can be loaded in background
         recommended_videos = get_recommended_videos(user_id, gcs_video_id)
         
         return render(request, 'main/video.html', {
@@ -323,50 +305,61 @@ def get_recommended_videos(current_user_id, current_video_id, limit=10):
         return []
 
 def search_results(request):
+    """
+    Improved search results page that works correctly with front-end
+    """
     query = request.GET.get('query', '')
+    offset = int(request.GET.get('offset', 0))
+    limit = int(request.GET.get('limit', 20))
+    json_response = request.GET.get('format') == 'json'
     
     if not query:
+        if json_response:
+            return JsonResponse({'videos': [], 'total': 0})
         return render(request, 'main/search.html', {'query': query, 'videos': []})
     
-    # Реализация поиска с использованием GCS
+    # Search implementation using GCS
     try:
         from .gcs_storage import list_user_videos, get_bucket, BUCKET_NAME, generate_video_url
         
-        # Получаем бакет
+        # Get bucket
         bucket = get_bucket(BUCKET_NAME)
         if not bucket:
+            if json_response:
+                return JsonResponse({'error': 'Failed to access storage', 'videos': []}, status=500)
             return render(request, 'main/search.html', {'query': query, 'videos': []})
             
-        # Получаем список пользователей
+        # Get list of users
         blobs = bucket.list_blobs(delimiter='/')
         prefixes = list(blobs.prefixes)
         users = [prefix.replace('/', '') for prefix in prefixes]
         
-        # Ищем среди всех видео
+        # Search across all videos
         search_results = []
         for user_id in users:
             user_videos = list_user_videos(user_id)
             if user_videos:
                 for video in user_videos:
-                    # Добавляем user_id к каждому видео
+                    # Add user_id to each video
                     if 'user_id' not in video:
                         video['user_id'] = user_id
                     
-                    # Проверяем соответствие поисковому запросу
+                    # Check for match with search query
                     title = video.get('title', '').lower()
                     description = video.get('description', '').lower()
-                    channel = user_id.lower()  # Поиск по имени пользователя
+                    channel = user_id.lower()  # Search by username
+                    query_lower = query.lower()
                     
-                    # Если найдено совпадение, добавляем видео в результаты
-                    if (query.lower() in title or 
-                        query.lower() in description or 
-                        query.lower() in channel):
+                    # If there's a match, add video to results
+                    if (query_lower in title or 
+                        query_lower in description or 
+                        query_lower in channel):
                         
-                        # Добавляем URL для видео
+                        # Add URL for video
                         video_id = video.get('video_id')
                         video['url'] = f"/video/{user_id}__{video_id}/"
                         
-                        # Добавляем URL для миниатюры
+                        # Add thumbnail URL if available
                         if 'thumbnail_path' in video:
                             video['thumbnail_url'] = generate_video_url(
                                 user_id, 
@@ -375,7 +368,7 @@ def search_results(request):
                                 expiration_time=3600
                             )
                             
-                        # Форматируем данные для отображения
+                        # Format data for display
                         views = video.get('views', 0)
                         if isinstance(views, int) or (isinstance(views, str) and views.isdigit()):
                             views = int(views)
@@ -386,18 +379,36 @@ def search_results(request):
                         else:
                             video['views_formatted'] = "0 просмотров"
                             
-                        # Отображаемое имя канала
+                        # Display name for channel
                         if 'channel' not in video:
                             video['channel'] = user_id
                             
                         search_results.append(video)
         
+        # Sort by relevance/recency
+        search_results.sort(key=lambda x: x.get('upload_date', ''), reverse=True)
+        
+        # Apply offset and limit
+        total_results = len(search_results)
+        paginated_results = search_results[offset:offset + limit]
+        
+        # JSON response for AJAX pagination
+        if json_response:
+            return JsonResponse({
+                'videos': paginated_results,
+                'total': total_results
+            })
+        
+        # Regular HTML response
         return render(request, 'main/search.html', {
             'query': query,
-            'videos': search_results
+            'videos': paginated_results,
+            'total': total_results
         })
     except Exception as e:
         logger.error(f"Error during search: {e}")
+        if json_response:
+            return JsonResponse({'error': str(e), 'videos': []}, status=500)
         return render(request, 'main/search.html', {
             'query': query,
             'videos': []
