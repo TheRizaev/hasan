@@ -187,17 +187,6 @@
     box-shadow: 0 5px 15px rgba(159, 37, 88, 0.3);
 }
 
-/* Спиннер загрузки с оптимизацией */
-.loading-spinner {
-    display: flex;
-    justify-content: center;
-    padding: 2rem;
-    color: var(--primary-color);
-    font-size: 2rem;
-    animation: spin 1s infinite linear;
-    contain: strict; /* Максимальное ограничение для улучшения производительности */
-}
-
 @keyframes spin {
     from {
         transform: rotate(0deg);

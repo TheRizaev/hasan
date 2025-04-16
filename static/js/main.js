@@ -50,7 +50,6 @@ function loadVideosFromGCS() {
     if (isLoading) return;
     
     isLoading = true;
-    if (loadingSpinner) loadingSpinner.style.display = 'flex';
     
     console.log(`Fetching videos: offset=${currentIndex}, limit=${videosPerPage}`);
     
@@ -62,7 +61,6 @@ function loadVideosFromGCS() {
         .then(response => response.json())
         .then(data => {
             isLoading = false;
-            if (loadingSpinner) loadingSpinner.style.display = 'none';
             
             console.log('API response:', data);
             
@@ -106,7 +104,6 @@ function loadVideosFromGCS() {
         })
         .catch(error => {
             isLoading = false;
-            if (loadingSpinner) loadingSpinner.style.display = 'none';
             console.error('Error fetching videos:', error);
         });
 }
@@ -124,9 +121,7 @@ function shuffleArray(array) {
 function loadMoreVideos() {
     if (isLoading || currentIndex >= totalVideos) return;
     
-    loadingSpinner = document.getElementById('loading-spinner');
     isLoading = true;
-    if (loadingSpinner) loadingSpinner.style.display = 'flex';
     
     loadVideosFromGCS();
 }
@@ -514,7 +509,6 @@ function setupCategories() {
             videosContainer.innerHTML = '';
             
             // Показываем спиннер загрузки
-            if (loadingSpinner) loadingSpinner.style.display = 'flex';
             
             // Добавляем небольшую задержку для отображения UX загрузки
             setTimeout(() => {
@@ -564,7 +558,6 @@ function setupCategories() {
                 }
                 
                 // Скрываем спиннер загрузки
-                if (loadingSpinner) loadingSpinner.style.display = 'none';
             }, 300);
         });
     });
@@ -572,7 +565,6 @@ function setupCategories() {
 
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
-    loadingSpinner = document.getElementById('loading-spinner');
     videosContainer = document.getElementById('videos-container');
     
     if (videosContainer && videosContainer.children.length === 0) {
