@@ -572,18 +572,29 @@ def delete_video_from_gcs(request, video_id):
 def get_video_url(request, video_id):
     """
     Получает временный URL для видео или его миниатюры.
-    Улучшенная версия с поддержкой запроса только миниатюры.
+    Улучшенная версия с поддержкой запроса только миниатюры и видео других пользователей.
     
     Параметры:
     - thumbnail: если 'true', вернет URL миниатюры вместо видео
+    - user_id: ID пользователя, которому принадлежит видео (опционально)
     """
     try:
-        username = request.user.username
+        # Check if a specific user_id is provided in the query parameters
+        user_id = request.GET.get('user_id')
+        
+        # If no user_id is provided in query params, check if video_id contains user info
+        if not user_id and '__' in video_id:
+            user_id, video_id = video_id.split('__', 1)
+        
+        # If still no user_id, default to the current user
+        if not user_id:
+            user_id = request.user.username
+            
         is_thumbnail = request.GET.get('thumbnail', 'false').lower() == 'true'
         
         # Получаем метаданные видео
         from .gcs_storage import get_video_metadata, generate_video_url
-        metadata = get_video_metadata(username, video_id)
+        metadata = get_video_metadata(user_id, video_id)
         
         if not metadata:
             return JsonResponse({'error': 'Метаданные видео не найдены'}, status=404)
@@ -593,10 +604,10 @@ def get_video_url(request, video_id):
             if not thumbnail_path:
                 return JsonResponse({'error': 'У видео нет миниатюры'}, status=404)
                 
-            url = generate_video_url(username, video_id, file_path=thumbnail_path, expiration_time=3600)
+            url = generate_video_url(user_id, video_id, file_path=thumbnail_path, expiration_time=3600)
         else:
             # Генерируем URL для самого видео
-            url = generate_video_url(username, video_id, expiration_time=3600)
+            url = generate_video_url(user_id, video_id, expiration_time=3600)
         
         if url:
             return JsonResponse({
