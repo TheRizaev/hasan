@@ -93,7 +93,7 @@ def video_detail(request, video_id):
         # Video ID format either username__video_id or just video_id
         if '__' in video_id:
             # If ID contains a separator, split it
-            user_id, gcs_video_id = video_id.split('__')
+            user_id, gcs_video_id = video_id.split('__', 1)
         else:
             # If old format or no user, search in metadata of all videos
             gcs_video_id = video_id
@@ -116,19 +116,62 @@ def video_detail(request, video_id):
                         user_id = user
                         break
         
+        # Если не удается найти видео или пользователя, отображаем страницу без остановки
         if not user_id:
-            logger.error(f"Could not find user for video {gcs_video_id}")
-            return render(request, 'main/404.html', status=404)
+            # Вместо ошибки используем пустые данные для отображения страницы
+            video_data = {
+                'id': f"unknown__{gcs_video_id}",
+                'gcs_id': gcs_video_id,
+                'user_id': "unknown",
+                'title': "Видео не найдено",
+                'description': "Видео не найдено или было удалено",
+                'channel': "Неизвестно",
+                'display_name': "Неизвестно",
+                'views': 0,
+                'views_formatted': "0 просмотров",
+                'likes': 0,
+                'dislikes': 0,
+                'duration': "00:00",
+                'upload_date': "",
+                'age': "Недавно"
+            }
             
+            return render(request, 'main/video.html', {
+                'video': video_data,
+                'comments': [],
+                'recommended_videos': []
+            })
+        
         # Fetch the metadata first - this is essential for displaying the page
         from .gcs_storage import get_video_metadata, get_video_comments, get_user_profile_from_gcs
         
         # Get video metadata
         metadata = get_video_metadata(user_id, gcs_video_id)
         
+        # Если не удается получить метаданные, отображаем страницу с базовыми данными
         if not metadata:
-            logger.error(f"Could not find metadata for video {gcs_video_id} from user {user_id}")
-            return render(request, 'main/404.html', status=404)
+            video_data = {
+                'id': f"{user_id}__{gcs_video_id}",
+                'gcs_id': gcs_video_id,
+                'user_id': user_id,
+                'title': "Загрузка видео...",
+                'description': "Информация о видео загружается",
+                'channel': user_id.replace('@', ''),
+                'display_name': user_id.replace('@', ''),
+                'views': 0,
+                'views_formatted': "0 просмотров",
+                'likes': 0,
+                'dislikes': 0,
+                'duration': "00:00",
+                'upload_date': "",
+                'age': "Недавно"
+            }
+            
+            return render(request, 'main/video.html', {
+                'video': video_data,
+                'comments': [],
+                'recommended_videos': []
+            })
         
         # Fetch user profile for display name
         user_profile = get_user_profile_from_gcs(user_id)
@@ -176,8 +219,30 @@ def video_detail(request, video_id):
             'recommended_videos': recommended_videos
         })
     except Exception as e:
+        # В случае ошибки все равно отображаем страницу с базовой информацией
         logger.error(f"Error loading video details: {e}")
-        return render(request, 'main/404.html', status=404)
+        video_data = {
+            'id': f"error__{video_id}",
+            'gcs_id': video_id,
+            'user_id': "error",
+            'title': "Ошибка загрузки видео",
+            'description': "Произошла ошибка при загрузке информации о видео",
+            'channel': "Ошибка",
+            'display_name': "Ошибка",
+            'views': 0,
+            'views_formatted': "0 просмотров",
+            'likes': 0,
+            'dislikes': 0,
+            'duration': "00:00",
+            'upload_date': "",
+            'age': "Недавно"
+        }
+        
+        return render(request, 'main/video.html', {
+            'video': video_data,
+            'comments': [],
+            'recommended_videos': []
+        })
         
 def get_recommended_videos(current_user_id, current_video_id, limit=10):
     """
@@ -525,6 +590,7 @@ def verify_email_view(request):
                         # Set profile fields
                         if hasattr(user, 'profile'):
                             user.profile.date_of_birth = form.cleaned_data['date_of_birth']
+                            user.profile.gender = form.cleaned_data['gender']  # Сохраняем пол
                             user.profile.email_verified = True
                             user.profile.save()
                         

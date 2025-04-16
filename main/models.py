@@ -29,6 +29,11 @@ class Video(models.Model):
     
     
 class UserProfile(models.Model):
+    GENDER_CHOICES = (
+        ('M', 'Мужской'),
+        ('F', 'Женский'),
+    )
+    
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     bio = models.TextField(max_length=500, blank=True)
     # Removed profile_picture since we're using GCS for storage
@@ -36,6 +41,8 @@ class UserProfile(models.Model):
     date_of_birth = models.DateField(null=True, blank=True)
     display_name = models.CharField(max_length=50, blank=True, null=True)  # Added display_name field
     email_verified = models.BooleanField(default=False)
+    # Добавляем поле для пола
+    gender = models.CharField(max_length=1, choices=GENDER_CHOICES, blank=True, null=True)
     
     # Author fields
     is_author = models.BooleanField(default=False)

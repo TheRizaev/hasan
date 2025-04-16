@@ -49,6 +49,22 @@
             </div>
             
             <div class="form-group">
+                <label>Пол</label>
+                <div class="gender-options">
+                    {% for choice in form.gender %}
+                    <div class="gender-option">
+                        {{ choice.tag }}
+                        <label for="{{ choice.id_for_label }}">{{ choice.choice_label }}</label>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% if form.gender.errors %}
+                    <div class="form-error">{{ form.gender.errors }}</div>
+                {% endif %}
+                <small class="form-help">Укажите ваш пол</small>
+            </div>
+            
+            <div class="form-group">
                 <label for="id_password1">Пароль</label>
                 {{ form.password1 }}
                 {% if form.password1.errors %}
@@ -94,6 +110,115 @@
 
 #id_username {
     padding-left: 30px !important;
+}
+
+/* Стили для полей выбора пола */
+.gender-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    margin-top: 10px;
+    margin-bottom: 10px;
+    padding: 10px 0;
+}
+
+.gender-option {
+    display: flex;
+    align-items: center;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    border-radius: 8px;
+    padding: 8px 15px;
+}
+
+.gender-option:hover {
+    background-color: rgba(159, 37, 88, 0.1);
+}
+
+/* Скрываем стандартную радиокнопку */
+.gender-option input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    margin: 0;
+}
+
+/* Создаем стилизованную кнопку */
+.gender-option label {
+    position: relative;
+    padding-left: 30px;
+    cursor: pointer;
+    display: inline-block;
+    font-weight: normal;
+    user-select: none;
+    color: var(--accent-color);
+}
+
+/* Создаем квадрат для чекбокса */
+.gender-option label:before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--accent-color);
+    border-radius: 4px;
+    background: transparent;
+    transition: all 0.2s ease;
+}
+
+/* Создаем галочку (скрытую изначально) */
+.gender-option label:after {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 3px;
+    width: 6px;
+    height: 12px;
+    border: solid var(--accent-color);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+/* Показываем галочку при выборе */
+.gender-option input[type="radio"]:checked + label:after {
+    opacity: 1;
+}
+
+/* Изменение стиля при наведении */
+.gender-option label:hover:before {
+    border-color: var(--primary-color);
+}
+
+/* Стили для темного режима */
+.dark-theme .gender-option:hover {
+    background-color: rgba(159, 37, 88, 0.2);
+}
+
+.dark-theme .gender-option label {
+    color: var(--primary-color);
+}
+
+.dark-theme .gender-option label:before {
+    border-color: var(--primary-color);
+}
+
+.dark-theme .gender-option label:after {
+    border-color: var(--primary-color);
+}
+
+/* Меняем стиль для выбранной опции */
+.gender-option input[type="radio"]:checked + label {
+    font-weight: bold;
+}
+
+/* Добавляем небольшой эффект при клике */
+.gender-option input[type="radio"]:active + label:before {
+    transform: scale(0.9);
 }
 </style>
 

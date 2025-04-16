@@ -393,8 +393,22 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Fetch video URL asynchronously
     function fetchVideoUrl(videoId) {
-        fetch(`/api/get-video-url/${videoId}/`)
-            .then(response => response.json())
+        // Error handling to make sure videoId and userId are valid
+        if (!videoId || !userId) {
+            console.error('Missing videoId or userId');
+            showErrorMessage('Ошибка загрузки: информация о видео отсутствует');
+            return;
+        }
+
+        const apiUrl = `/api/get-video-url/${videoId}/`;
+        
+        fetch(apiUrl)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success && data.url) {
                     // Set video source and start loading
@@ -403,6 +417,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     source.type = 'video/mp4';
                     videoPlayer.appendChild(source);
                     videoPlayer.load();
+                    
+                    // Preload metadata
+                    videoPlayer.setAttribute('preload', 'metadata');
                 } else {
                     console.error('Error loading video:', data.error || 'Unknown error');
                     showErrorMessage('Не удалось загрузить видео. Пожалуйста, попробуйте позже.');
@@ -462,6 +479,30 @@ document.addEventListener('DOMContentLoaded', function() {
         updatePlayPauseIcon(false);
     });
     
+    // Error handler - show error message
+    videoPlayer.addEventListener('error', function() {
+        let errorMessage = 'Ошибка при загрузке видео';
+        
+        if (videoPlayer.error) {
+            switch (videoPlayer.error.code) {
+                case MediaError.MEDIA_ERR_ABORTED:
+                    errorMessage = 'Воспроизведение прервано пользователем';
+                    break;
+                case MediaError.MEDIA_ERR_NETWORK:
+                    errorMessage = 'Сетевая ошибка при загрузке видео';
+                    break;
+                case MediaError.MEDIA_ERR_DECODE:
+                    errorMessage = 'Ошибка декодирования видео';
+                    break;
+                case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+                    errorMessage = 'Формат видео не поддерживается';
+                    break;
+            }
+        }
+        
+        showErrorMessage(errorMessage);
+    });
+    
     // Play/pause button handler
     playPauseBtn.addEventListener('click', togglePlay);
     
@@ -518,16 +559,22 @@ document.addEventListener('DOMContentLoaded', function() {
         if (document.fullscreenElement) {
             document.exitFullscreen();
         } else {
-            videoContainer.requestFullscreen();
+            videoContainer.requestFullscreen().catch(err => {
+                console.error(`Ошибка при переходе в полноэкранный режим: ${err.message}`);
+            });
         }
     });
     
     // PiP button click handler
     pipBtn.addEventListener('click', function() {
         if (document.pictureInPictureElement) {
-            document.exitPictureInPicture();
+            document.exitPictureInPicture().catch(err => {
+                console.error(`Ошибка при выходе из режима картинка-в-картинке: ${err.message}`);
+            });
         } else if (document.pictureInPictureEnabled) {
-            videoPlayer.requestPictureInPicture();
+            videoPlayer.requestPictureInPicture().catch(err => {
+                console.error(`Ошибка при входе в режим картинка-в-картинке: ${err.message}`);
+            });
         }
     });
     

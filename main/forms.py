@@ -28,10 +28,24 @@ class UserRegistrationForm(UserCreationForm):
         help_text="Ваша дата рождения",
         input_formats=['%d.%m.%Y', '%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%m/%d/%Y']
     )
+    # Добавляем поле для пола
+    GENDER_CHOICES = (
+        ('M', 'Мужской'),
+        ('F', 'Женский'),
+    )
+    gender = forms.ChoiceField(
+        required=True, 
+        choices=GENDER_CHOICES,
+        widget=forms.RadioSelect(attrs={
+            'class': 'gender-radio'
+        }),
+        label="Пол",
+        help_text="Укажите ваш пол"
+    )
     
     class Meta:
         model = User
-        fields = ['username', 'email', 'date_of_birth', 'password1', 'password2']
+        fields = ['username', 'email', 'date_of_birth', 'gender', 'password1', 'password2']
     
     def clean_email(self):
         email = self.cleaned_data.get('email')
@@ -86,7 +100,7 @@ class DisplayNameForm(forms.ModelForm):
             'class': 'form-input',
             'placeholder': 'Как к вам обращаться'
         }),
-        help_text="Это имя будет отображаться в профиле и комментариях"
+        help_text="Это имя будет отображаться в вашем профиле и комментариях"
     )
     
     class Meta:
