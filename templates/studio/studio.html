@@ -13,6 +13,23 @@
         </button>
     </div>
 
+    <div class="form-group">
+        <label for="quality-settings">Настройки качества</label>
+        <div class="quality-options-container">
+            <div class="quality-option">
+                <input type="checkbox" id="process_qualities" name="process_qualities" value="true" checked>
+                <label for="process_qualities">Создать версии разного качества (720p, 480p, 360p)</label>
+            </div>
+            <div class="quality-help">
+                <span class="help-icon">💡</span>
+                <div class="help-text">
+                    <p>Эта опция позволяет автоматически создать видео в разных разрешениях для экономии трафика пользователей.</p>
+                    <p>Рекомендуется включить, но обработка видео займет больше времени.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Модальное окно формы загрузки -->
     <div id="uploadModal" class="upload-modal">
         <div class="upload-modal-content">
@@ -109,6 +126,13 @@
                     <div class="success-icon">✅</div>
                     <h3>Видео успешно загружено!</h3>
                     <p>Ваше видео загружено и будет доступно после обработки.</p>
+                    
+                    <div class="quality-processing">
+                        <h4><span class="icon">⚙️</span> Обработка разрешений <span class="processing-badge">В процессе</span></h4>
+                        <p>Ваше видео обрабатывается для создания версий разного качества. Это может занять некоторое время в зависимости от размера и длительности видео.</p>
+                        <p>Вы можете закрыть это окно. Все версии качества будут доступны автоматически после обработки.</p>
+                    </div>
+                    
                     <button class="close-success-btn">Закрыть</button>
                 </div>
             </div>
@@ -803,13 +827,17 @@
         const progressPercentage = document.querySelector('.progress-percentage');
         const progressMessage = document.querySelector('.progress-message');
         
-        // Начальное сообщение
+        // Handle quality processing checkbox
+        const processQualities = document.getElementById('process_qualities').checked;
+        formData.append('process_qualities', processQualities);
+        
+        // Update initial message
         progressMessage.textContent = 'Подготовка видео для загрузки...';
         
-        // Создать объект XHR для отслеживания прогресса
+        // Create XHR object for tracking progress
         const xhr = new XMLHttpRequest();
         
-        // Отслеживание прогресса загрузки
+        // Track upload progress
         xhr.upload.addEventListener('progress', function(e) {
             if (e.lengthComputable) {
                 const percent = Math.round((e.loaded / e.total) * 100);
@@ -822,31 +850,41 @@
                     updateStep('process');
                     progressMessage.textContent = 'Обработка видео...';
                 } else if (percent > 66) {
-                    progressMessage.textContent = 'Создание метаданных и завершение...';
+                    progressMessage.textContent = 'Создание метаданных...';
                 }
             }
         });
         
-        // Обработка завершенного запроса
+        // Handle completed request
         xhr.addEventListener('load', function() {
             if (xhr.status >= 200 && xhr.status < 300) {
-                // Успех
+                // Success
                 try {
                     const response = JSON.parse(xhr.responseText);
                     if (response.success) {
-                        // Завершение прогресс-бара
+                        // Complete progress bar
                         progressBar.style.width = '100%';
                         progressPercentage.textContent = '100%';
                         progressMessage.textContent = 'Загрузка завершена!';
                         updateStep('complete');
                         
-                        // Показать сообщение об успехе
+                        // Show success message
                         setTimeout(function() {
                             document.querySelector('.upload-progress-container').style.display = 'none';
-                            document.querySelector('.upload-success').style.display = 'block';
+                            
+                            const successElement = document.querySelector('.upload-success');
+                            successElement.style.display = 'block';
+                            
+                            // Update quality processing message based on settings
+                            const qualityProcessingSection = successElement.querySelector('.quality-processing');
+                            if (processQualities) {
+                                qualityProcessingSection.style.display = 'block';
+                            } else {
+                                qualityProcessingSection.style.display = 'none';
+                            }
                         }, 1000);
                         
-                        // Обновить список видео после успешной загрузки
+                        // Refresh video list after successful upload (with delay)
                         setTimeout(function() {
                             window.location.reload();
                         }, 3000);
@@ -857,26 +895,26 @@
                     handleUploadError(error);
                 }
             } else {
-                // Ошибка
+                // Error
                 handleUploadError(new Error('Сервер вернул статус ' + xhr.status));
             }
         });
         
-        // Обработка сетевых ошибок
+        // Handle network errors
         xhr.addEventListener('error', function() {
             handleUploadError(new Error('Произошла сетевая ошибка'));
         });
         
-        // Обработка таймаута
+        // Handle timeout
         xhr.addEventListener('timeout', function() {
             handleUploadError(new Error('Превышено время ожидания загрузки'));
         });
         
-        // Настройка запроса
+        // Configure request
         xhr.open('POST', '/api/upload-video/', true);
         xhr.setRequestHeader('X-CSRFToken', document.querySelector('[name=csrfmiddlewaretoken]').value);
         
-        // Отправить данные формы
+        // Send form data
         xhr.send(formData);
     }
     

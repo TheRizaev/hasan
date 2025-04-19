@@ -1037,3 +1037,126 @@ def get_cached_metadata(limit=None, offset=0, shuffle=False):
     except Exception as e:
         logger.error(f"Error getting cached metadata: {e}")
         return [], 0
+    
+def get_video_url_with_quality(user_id, video_id, quality=None, expiration_time=3600):
+    """
+    Generates a temporary URL for a video with specified quality
+    
+    Args:
+        user_id (str): User ID (including @ prefix)
+        video_id (str): Video ID
+        quality (str, optional): Video quality (e.g., '480p', '720p', '1080p')
+                                 If None, return highest available quality
+        expiration_time (int): URL expiration time in seconds
+    
+    Returns:
+        dict: Information about the URL and available qualities
+    """
+    metadata = get_video_metadata(user_id, video_id)
+    
+    if not metadata:
+        logger.error(f"Could not find video metadata for {video_id}")
+        return None
+    
+    # Check if video has quality variants
+    quality_variants = metadata.get('quality_variants', {})
+    
+    # If no quality variants, return the original URL
+    if not quality_variants:
+        original_url = generate_video_url(user_id, video_id, expiration_time=expiration_time)
+        return {
+            'url': original_url,
+            'quality': 'original',
+            'available_qualities': ['original']
+        }
+    
+    # Get available qualities
+    available_qualities = list(quality_variants.keys())
+    
+    # If no quality specified or requested quality not available, use highest available
+    if not quality or quality not in available_qualities:
+        # Use the highest quality as default (or what's set in metadata)
+        quality = metadata.get('highest_quality', available_qualities[-1])
+    
+    # Get the path for the selected quality
+    quality_path = quality_variants.get(quality, {}).get('path')
+    
+    # If path not found, return the original video
+    if not quality_path:
+        original_url = generate_video_url(user_id, video_id, expiration_time=expiration_time)
+        return {
+            'url': original_url,
+            'quality': 'original',
+            'available_qualities': ['original'] + available_qualities
+        }
+    
+    # Generate signed URL for the selected quality
+    bucket = get_bucket()
+    if not bucket:
+        logger.error(f"Could not get bucket for generating URL")
+        return None
+    
+    # Get blob for the quality variant
+    quality_blob = bucket.blob(quality_path)
+    
+    if not quality_blob.exists():
+        logger.error(f"Quality variant {quality} not found for video {video_id}")
+        return None
+    
+    try:
+        url = quality_blob.generate_signed_url(
+            version="v4",
+            expiration=expiration_time,
+            method="GET"
+        )
+        
+        logger.info(f"Generated URL for video {video_id} at quality {quality}")
+        
+        # Return URL and available qualities
+        return {
+            'url': url,
+            'quality': quality,
+            'available_qualities': available_qualities
+        }
+    
+    except Exception as e:
+        logger.error(f"Error generating URL for quality variant: {e}")
+        return None
+
+def upload_video_with_quality_processing(user_id, video_file_path, title=None, description=None, process_qualities=True):
+    """
+    Uploads video to storage and creates quality variants
+    
+    Args:
+        user_id (str): User ID (with @ prefix)
+        video_file_path (str): Path to the video file
+        title (str, optional): Video title
+        description (str, optional): Video description
+        process_qualities (bool): Whether to process different quality variants
+    
+    Returns:
+        str: Video ID if successful, None otherwise
+    """
+    # First upload the original video
+    video_id = upload_video(user_id, video_file_path, title, description)
+    
+    if not video_id or not process_qualities:
+        return video_id
+    
+    # Now process different quality variants in the background
+    try:
+        # Import video quality processing functionality
+        from .video_quality import create_quality_variants
+        
+        # Create quality variants
+        quality_variants = create_quality_variants(video_file_path, user_id, video_id)
+        
+        if quality_variants:
+            logger.info(f"Successfully created {len(quality_variants)} quality variants for video {video_id}")
+        else:
+            logger.warning(f"No quality variants created for video {video_id}")
+    
+    except Exception as e:
+        logger.error(f"Error processing quality variants: {str(e)}")
+    
+    return video_id

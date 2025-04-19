@@ -30,49 +30,54 @@ from .gcs_storage import (
 @require_http_methods(["POST"])
 def upload_video_to_gcs(request):
     """
-    Обработчик загрузки видео в Google Cloud Storage с улучшенной обработкой ошибок
+    Handler for uploading videos to Google Cloud Storage with quality processing
     """
     try:
-        # Получаем файлы и данные из запроса
+        # Get files and data from request
         video_file = request.FILES.get('video_file')
         thumbnail = request.FILES.get('thumbnail')
         title = request.POST.get('title')
         description = request.POST.get('description', '')
         category_id = request.POST.get('category')
         
-        if not video_file or not title:
-            return JsonResponse({'error': 'Видео и название обязательны'}, status=400)
+        # New parameter to control quality processing
+        process_qualities = request.POST.get('process_qualities', 'true').lower() == 'true'
         
-        # Создаем временную директорию, если она не существует
+        if not video_file or not title:
+            return JsonResponse({'error': 'Video and title are required'}, status=400)
+        
+        # Create temp directory if it doesn't exist
         temp_dir = os.path.join(settings.MEDIA_ROOT, 'temp')
         os.makedirs(temp_dir, exist_ok=True)
         
-        # Получаем имя пользователя для хранения в GCS (сохраняем префикс @)
+        # Get username for GCS storage (preserve @ prefix)
         username = request.user.username
-        # ВАЖНО: больше не удаляем префикс @, сохраняем его для GCS
         
-        # Временно сохраняем файлы на сервере
+        # Temporarily save files on server
         temp_video_path = os.path.join(temp_dir, f"{uuid.uuid4()}_{video_file.name}")
         
         with open(temp_video_path, 'wb+') as destination:
             for chunk in video_file.chunks():
                 destination.write(chunk)
         
-        # Загружаем видео в GCS
-        video_id = upload_video(
+        # Upload video to GCS with quality processing
+        from .gcs_storage import upload_video_with_quality_processing
+        
+        video_id = upload_video_with_quality_processing(
             user_id=username,
             video_file_path=temp_video_path,
             title=title,
-            description=description
+            description=description,
+            process_qualities=process_qualities
         )
         
-        # Если загрузка видео не удалась
+        # If video upload failed
         if not video_id:
             if os.path.exists(temp_video_path):
                 os.remove(temp_video_path)
-            return JsonResponse({'error': 'Не удалось загрузить видео в Google Cloud Storage'}, status=500)
+            return JsonResponse({'error': 'Failed to upload video to Google Cloud Storage'}, status=500)
         
-        # Если есть миниатюра, загружаем и её
+        # Handle thumbnail if present
         thumbnail_url = None
         if thumbnail:
             temp_thumbnail_path = os.path.join(temp_dir, f"{uuid.uuid4()}_{thumbnail.name}")
@@ -82,12 +87,12 @@ def upload_video_to_gcs(request):
             
             thumbnail_success = upload_thumbnail(username, video_id, temp_thumbnail_path)
             
-            # Удаляем временный файл миниатюры
+            # Delete temp thumbnail file
             if os.path.exists(temp_thumbnail_path):
                 os.remove(temp_thumbnail_path)
                 
             if thumbnail_success:
-                # Получаем URL миниатюры
+                # Get thumbnail URL
                 metadata = get_video_metadata(username, video_id)
                 if metadata and "thumbnail_path" in metadata:
                     thumbnail_url = generate_video_url(
@@ -97,25 +102,31 @@ def upload_video_to_gcs(request):
                         expiration_time=3600
                     )
         
-        # Удаляем временный файл видео
+        # Delete temp video file
         if os.path.exists(temp_video_path):
             os.remove(temp_video_path)
         
-        # Получаем метаданные для загруженного видео
+        # Get metadata for uploaded video
         video_metadata = get_video_metadata(username, video_id)
         
-        # Генерируем временный URL для доступа к видео
-        video_url = generate_video_url(username, video_id, expiration_time=3600)
+        # Generate temporary URL for video access
+        from .gcs_storage import get_video_url_with_quality
         
-        # Добавляем URL в метаданные
+        video_url_info = get_video_url_with_quality(username, video_id, expiration_time=3600)
+        
+        # Add URL to metadata
         if video_metadata:
-            video_metadata['url'] = video_url
+            if video_url_info:
+                video_metadata['url'] = video_url_info['url']
+                video_metadata['quality'] = video_url_info['quality']
+                video_metadata['available_qualities'] = video_url_info['available_qualities']
+            
             if thumbnail_url:
                 video_metadata['thumbnail_url'] = thumbnail_url
                 
-            # Создаем или обновляем объект Video в базе данных, если необходимо
+            # Create or update Video object in database if needed
             try:
-                # Если есть категория
+                # If category exists
                 category = None
                 if category_id:
                     try:
@@ -123,14 +134,14 @@ def upload_video_to_gcs(request):
                     except Category.DoesNotExist:
                         pass
                 
-                # Проверяем, существует ли уже видео
+                # Check if video already exists
                 video_obj, created = Video.objects.get_or_create(
                     title=title,
                     defaults={
-                        'channel_id': 1,  # Предполагаем, что канал уже создан
+                        'channel_id': 1,  # Assume channel already created
                         'category': category,
                         'views': '0',
-                        'age_text': 'Только что',
+                        'age_text': 'Just now',
                         'duration': video_metadata.get('duration', '00:00'),
                     }
                 )
@@ -138,12 +149,13 @@ def upload_video_to_gcs(request):
                 video_metadata['video_db_id'] = video_obj.id
             except Exception as db_err:
                 logger.error(f"Error creating database record: {db_err}")
-                # Не возвращаем ошибку, так как видео уже загружено в GCS
+                # Don't return error since video is already uploaded to GCS
         
         return JsonResponse({
             'success': True,
             'video_id': video_id,
-            'metadata': video_metadata
+            'metadata': video_metadata,
+            'processing_qualities': process_qualities
         })
         
     except Exception as e:
@@ -571,52 +583,62 @@ def delete_video_from_gcs(request, video_id):
 @require_http_methods(["GET"])
 def get_video_url(request, video_id):
     """
-    Получает временный URL для видео или его миниатюры.
-    Улучшенная версия с поддержкой запроса только миниатюры и видео других пользователей.
+    Gets temporary URL for video or its thumbnail with quality selection.
+    Enhanced version with support for thumbnail request and videos from other users.
     
-    Параметры:
-    - thumbnail: если 'true', вернет URL миниатюры вместо видео
-    - user_id: ID пользователя, которому принадлежит видео (опционально)
+    Parameters:
+    - thumbnail: if 'true', returns thumbnail URL instead of video
+    - user_id: ID of the user who owns the video (optional)
+    - quality: Video quality to retrieve (e.g., '480p', '720p', '1080p')
     """
     try:
-        # Check if a specific user_id is provided in the query parameters
+        # Check if specific user_id is provided in query parameters
         user_id = request.GET.get('user_id')
         
-        # If no user_id is provided in query params, check if video_id contains user info
+        # If no user_id provided in query params, check if video_id contains user info
         if not user_id and '__' in video_id:
             user_id, video_id = video_id.split('__', 1)
         
-        # If still no user_id, default to the current user
+        # If still no user_id, default to current user
         if not user_id:
             user_id = request.user.username
             
         is_thumbnail = request.GET.get('thumbnail', 'false').lower() == 'true'
+        quality = request.GET.get('quality')  # New parameter for quality selection
         
-        # Получаем метаданные видео
-        from .gcs_storage import get_video_metadata, generate_video_url
+        # Get video metadata
+        from .gcs_storage import get_video_metadata, generate_video_url, get_video_url_with_quality
         metadata = get_video_metadata(user_id, video_id)
         
         if not metadata:
-            return JsonResponse({'error': 'Метаданные видео не найдены'}, status=404)
+            return JsonResponse({'error': 'Video metadata not found'}, status=404)
         
         if is_thumbnail:
             thumbnail_path = metadata.get('thumbnail_path')
             if not thumbnail_path:
-                return JsonResponse({'error': 'У видео нет миниатюры'}, status=404)
+                return JsonResponse({'error': 'Video has no thumbnail'}, status=404)
                 
             url = generate_video_url(user_id, video_id, file_path=thumbnail_path, expiration_time=3600)
+            if url:
+                return JsonResponse({
+                    'success': True,
+                    'url': url,
+                    'is_thumbnail': True
+                })
         else:
-            # Генерируем URL для самого видео
-            url = generate_video_url(user_id, video_id, expiration_time=3600)
+            # Generate URL for video with quality selection
+            video_url_info = get_video_url_with_quality(user_id, video_id, quality, expiration_time=3600)
+            
+            if video_url_info and video_url_info['url']:
+                return JsonResponse({
+                    'success': True,
+                    'url': video_url_info['url'],
+                    'quality': video_url_info['quality'],
+                    'available_qualities': video_url_info['available_qualities'],
+                    'is_thumbnail': False
+                })
         
-        if url:
-            return JsonResponse({
-                'success': True,
-                'url': url,
-                'is_thumbnail': is_thumbnail
-            })
-        else:
-            return JsonResponse({'error': 'Не удалось сгенерировать URL'}, status=400)
+        return JsonResponse({'error': 'Failed to generate URL'}, status=400)
             
     except Exception as e:
         logger.error(f"Error generating URL: {str(e)}")

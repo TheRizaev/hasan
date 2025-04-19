@@ -117,21 +117,23 @@
                 
                 <div class="settings-item" id="quality-item">
                     <span>Качество</span>
-                    <span id="current-quality">Авто</span>
+                    <span id="current-quality">авто</span>
                 </div>
                 
                 <div class="quality-options" id="quality-options">
-                    <div class="quality-option active" data-quality="auto">Авто</div>
-                    <div class="quality-option" data-quality="1080p">1080p</div>
-                    <div class="quality-option" data-quality="720p">720p</div>
-                    <div class="quality-option" data-quality="480p">480p</div>
-                    <div class="quality-option" data-quality="360p">360p</div>
+                    <div class="quality-option" data-quality="auto">авто</div>
+                    <!-- Quality options will be added dynamically via JavaScript -->
                 </div>
                 
                 <div class="settings-item" id="loop-item">
                     <span>Повтор</span>
                     <span id="loop-status">Выкл</span>
                 </div>
+            </div>
+
+            <div class="quality-change-overlay" id="quality-change-overlay">
+                <div class="quality-change-spinner"></div>
+                <div class="quality-change-text">Изменение качества...</div>
             </div>
         </div>
 
@@ -273,7 +275,6 @@
         const currentSpeed = document.getElementById('current-speed');
         const currentQuality = document.getElementById('current-quality');
         const speedOptions = document.querySelectorAll('.speed-option');
-        const qualityOptionsElements = document.querySelectorAll('.quality-option');
         const loadingSpinner = document.getElementById('loading-spinner');
         const videoContainer = document.querySelector('.video-container');
         
@@ -283,6 +284,10 @@
         // Get video id and user id from the container data attributes
         const videoId = videoContainer.getAttribute('data-video-id');
         const userId = videoContainer.getAttribute('data-user-id');
+        
+        // Variables for tracking available qualities
+        let availableQualities = [];
+        let currentQualitySelection = 'auto';
         
         // Show loading spinner
         loadingSpinner.classList.add('visible');
@@ -391,17 +396,17 @@
             }
         }
         
-        // Fetch video URL asynchronously
-        function fetchVideoUrl(videoId, userId) {
+        // Fetch video URL asynchronously with quality selection
+        function fetchVideoUrl(videoId, userId, quality = 'auto') {
             // Error handling to make sure videoId and userId are valid
             if (!videoId || !userId) {
                 console.error('Missing videoId or userId');
                 showErrorMessage('Ошибка загрузки: информация о видео отсутствует');
                 return;
             }
-    
-            // Construct API URL with user_id parameter
-            const apiUrl = `/api/get-video-url/${videoId}/?user_id=${encodeURIComponent(userId)}`;
+            
+            // Construct API URL with user_id parameter and quality
+            const apiUrl = `/api/get-video-url/${videoId}/?user_id=${encodeURIComponent(userId)}&quality=${quality}`;
             
             fetch(apiUrl)
                 .then(response => {
@@ -412,6 +417,18 @@
                 })
                 .then(data => {
                     if (data.success && data.url) {
+                        // Store available qualities
+                        availableQualities = data.available_qualities || [];
+                        currentQualitySelection = data.quality || 'auto';
+                        
+                        // Initialize quality selector
+                        initializeQualityOptions(availableQualities);
+                        
+                        // Update current quality display
+                        if (currentQuality) {
+                            currentQuality.textContent = currentQualitySelection;
+                        }
+                        
                         // Set video source and start loading
                         const source = document.createElement('source');
                         source.src = data.url;
@@ -620,22 +637,6 @@
             playbackSpeedOptions.classList.remove('active');
         });
         
-        // Quality options handlers
-        qualityOptionsElements.forEach(option => {
-            option.addEventListener('click', function() {
-                const quality = option.getAttribute('data-quality');
-                currentQuality.textContent = quality;
-                
-                qualityOptionsElements.forEach(opt => {
-                    opt.classList.remove('active');
-                });
-                option.classList.add('active');
-                
-                // For demo, just show a message about quality change
-                console.log(`Quality changed to ${quality}`);
-            });
-        });
-        
         // Loop toggle handler
         loopItem.addEventListener('click', function() {
             videoPlayer.loop = !videoPlayer.loop;
@@ -701,8 +702,8 @@
         // Initialize async video loading
         // Start video loading immediately (don't wait for any other resources)
         if (videoId && userId) {
-            // Initiate video loading immediately
-            fetchVideoUrl(videoId, userId);
+            // Initiate video loading immediately with auto quality
+            fetchVideoUrl(videoId, userId, 'auto');
         } else {
             showErrorMessage('Ошибка: Не найден идентификатор видео');
         }
@@ -716,199 +717,213 @@
                 // In a real app, you would make an AJAX request to track the view
             }
         });
-        
-        // Like/dislike buttons functionality
-        const likeButton = document.getElementById('likeButton');
-        const dislikeButton = document.getElementById('dislikeButton');
-        const likeCount = document.getElementById('likeCount');
-        const dislikeCount = document.getElementById('dislikeCount');
-        
-        if (likeButton && dislikeButton) {
-            likeButton.addEventListener('click', function() {
-                if (this.classList.contains('active')) {
-                    // Unlike
-                    this.classList.remove('active');
-                    likeCount.textContent = parseInt(likeCount.textContent) - 1;
-                } else {
-                    // Like
-                    this.classList.add('active');
-                    likeCount.textContent = parseInt(likeCount.textContent) + 1;
-                    
-                    // If dislike was active, remove it
-                    if (dislikeButton.classList.contains('active')) {
-                        dislikeButton.classList.remove('active');
-                        dislikeCount.textContent = parseInt(dislikeCount.textContent) - 1;
-                    }
-                }
-            });
-            
-            dislikeButton.addEventListener('click', function() {
-                if (this.classList.contains('active')) {
-                    // Un-dislike
-                    this.classList.remove('active');
-                    dislikeCount.textContent = parseInt(dislikeCount.textContent) - 1;
-                } else {
-                    // Dislike
-                    this.classList.add('active');
-                    dislikeCount.textContent = parseInt(dislikeCount.textContent) + 1;
-                    
-                    // If like was active, remove it
-                    if (likeButton.classList.contains('active')) {
-                        likeButton.classList.remove('active');
-                        likeCount.textContent = parseInt(likeCount.textContent) - 1;
-                    }
-                }
-            });
-        }
-        
-        // Comment functionality
-        const commentInput = document.querySelector('.comment-form input');
-        if (commentInput) {
-            commentInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter' && this.value.trim() !== '') {
-                    // In a real app, you would make an AJAX request to save the comment
-                    // For demo purposes, we'll just add it to the DOM
-                    addNewComment(this.value);
-                    this.value = '';
-                }
-            });
-        }
-        
-        // Function to add a new comment to the DOM
-        function addNewComment(text) {
-            const commentsList = document.querySelector('.comments-list');
-            if (commentsList) {
-                // Get current user details
-                const userAvatar = document.querySelector('.user-avatar');
-                const userInitial = userAvatar ? userAvatar.textContent : 'U';
-                
-                // Create a new comment element
-                const newComment = document.createElement('div');
-                newComment.className = 'comment';
-                newComment.innerHTML = `
-                    <div class="comment-avatar">${userInitial}</div>
-                    <div class="comment-content">
-                        <div class="comment-author">Вы</div>
-                        <div class="comment-text">${text}</div>
-                        <div class="comment-meta">Только что</div>
-                        <div class="comment-actions">
-                            <button class="comment-like">👍 <span>0</span></button>
-                            <button class="comment-dislike">👎</button>
-                            <button class="comment-reply">Ответить</button>
-                        </div>
-                    </div>
-                `;
-                
-                // Add comment interaction functionality
-                const likeBtn = newComment.querySelector('.comment-like');
-                if (likeBtn) {
-                    likeBtn.addEventListener('click', function() {
-                        const countSpan = this.querySelector('span');
-                        const currentCount = parseInt(countSpan.textContent);
-                        if (this.classList.contains('active')) {
-                            this.classList.remove('active');
-                            countSpan.textContent = currentCount - 1;
-                        } else {
-                            this.classList.add('active');
-                            countSpan.textContent = currentCount + 1;
-                        }
-                    });
-                }
-                
-                // Check if there's a placeholder comment from KRONIK
-                const kronikComment = commentsList.querySelector('.comment-author:contains("KRONIK")');
-                if (kronikComment) {
-                    kronikComment.closest('.comment').remove();
-                }
-                
-                // Insert at the top of the list
-                commentsList.insertBefore(newComment, commentsList.firstChild);
-            }
-        }
-        
-        // Load related videos asynchronously
-        function loadRelatedVideos() {
-            const relatedContainer = document.getElementById('related-videos-container');
-            
-            if (relatedContainer && relatedContainer.children.length === 0) {
-                // Only load if there are no videos already
-                const loadingMessage = document.createElement('p');
-                loadingMessage.style.padding = '20px';
-                loadingMessage.style.color = 'var(--gray-color)';
-                loadingMessage.style.textAlign = 'center';
-                loadingMessage.textContent = 'Загрузка рекомендаций...';
-                relatedContainer.appendChild(loadingMessage);
-                
-                // Fetch related videos from API
-                fetch(`/api/list-all-videos/?limit=10&offset=${Math.floor(Math.random() * 20)}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        // Clear the loading message
-                        relatedContainer.innerHTML = '';
-                        
-                        if (data.success && data.videos && data.videos.length > 0) {
-                            // Filter out the current video
-                            const filteredVideos = data.videos.filter(video => 
-                                !(video.user_id === userId && video.video_id === videoId)
-                            );
-                            
-                            // Limit to 8 videos
-                            const relatedVideos = filteredVideos.slice(0, 8);
-                            
-                            // Create and append video cards
-                            relatedVideos.forEach(video => {
-                                const videoCard = document.createElement('div');
-                                videoCard.className = 'related-video-card';
-                                videoCard.onclick = function() {
-                                    window.location.href = `/video/${video.user_id}__${video.video_id}/`;
-                                };
-                                
-                                // Default or thumbnail URL
-                                const thumbnailUrl = video.thumbnail_url || '/static/placeholder.jpg';
-                                
-                                // Display name or channel or username
-                                const displayName = video.display_name || video.channel || video.user_id.replace('@', '');
-                                
-                                videoCard.innerHTML = `
-                                    <div class="related-thumbnail">
-                                        <img src="${thumbnailUrl}" alt="${video.title}" onerror="this.src='/static/placeholder.jpg'">
-                                    </div>
-                                    <div class="related-info">
-                                        <div class="related-title">${video.title}</div>
-                                        <div class="related-channel">${displayName}</div>
-                                        <div class="related-stats">${video.views_formatted || '0 просмотров'}</div>
-                                    </div>
-                                `;
-                                
-                                relatedContainer.appendChild(videoCard);
-                            });
-                        } else {
-                            // No videos found
-                            const noVideosMessage = document.createElement('p');
-                            noVideosMessage.style.padding = '20px';
-                            noVideosMessage.style.color = 'var(--gray-color)';
-                            noVideosMessage.style.textAlign = 'center';
-                            noVideosMessage.textContent = 'Рекомендации не найдены';
-                            relatedContainer.appendChild(noVideosMessage);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error loading related videos:', error);
-                        
-                        const errorMessage = document.createElement('p');
-                        errorMessage.style.padding = '20px';
-                        errorMessage.style.color = '#ff4757';
-                        errorMessage.style.textAlign = 'center';
-                        errorMessage.textContent = 'Ошибка при загрузке рекомендаций';
-                        
-                        relatedContainer.innerHTML = '';
-                        relatedContainer.appendChild(errorMessage);
-                    });
-            }
-        }
-        
-        // Load related videos after a short delay to prioritize main video loading
-        setTimeout(loadRelatedVideos, 100);
     });
+</script>
+
+<script>
+    /**
+     * Quality Selection Functions
+     */
+    
+    // Function to fetch video URL for specific quality
+    function fetchVideoQuality(userId, videoId, quality) {
+        return fetch(`/api/get-video-url/${videoId}/?user_id=${encodeURIComponent(userId)}&quality=${quality}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            });
+    }
+    
+    // Function to show quality change overlay
+    function showQualityChangeOverlay() {
+        const overlay = document.getElementById('quality-change-overlay');
+        if (overlay) {
+            overlay.classList.add('visible');
+        }
+    }
+    
+    // Function to hide quality change overlay
+    function hideQualityChangeOverlay() {
+        const overlay = document.getElementById('quality-change-overlay');
+        if (overlay) {
+            overlay.classList.remove('visible');
+        }
+    }
+    
+    // Function to change video quality
+    function changeVideoQuality(quality) {
+        const videoPlayer = document.getElementById('video-player');
+        const videoContainer = document.querySelector('.video-container');
+        
+        if (!videoPlayer || !videoContainer) return;
+        
+        // Get video ID and user ID
+        const videoId = videoContainer.getAttribute('data-video-id');
+        const userId = videoContainer.getAttribute('data-user-id');
+        
+        if (!videoId || !userId) {
+            console.error('Missing video ID or user ID');
+            return;
+        }
+        
+        // Save current playback state
+        const currentTime = videoPlayer.currentTime;
+        const wasPlaying = !videoPlayer.paused;
+        
+        // Pause video and show loading overlay
+        videoPlayer.pause();
+        showQualityChangeOverlay();
+        
+        // Fetch video URL for the selected quality
+        fetchVideoQuality(userId, videoId, quality)
+            .then(data => {
+                if (data.success && data.url) {
+                    // Update current quality display
+                    const currentQualityDisplay = document.getElementById('current-quality');
+                    if (currentQualityDisplay) {
+                        currentQualityDisplay.textContent = data.quality;
+                    }
+                    
+                    // Update active class on quality options
+                    const qualityOptions = document.querySelectorAll('.quality-option');
+                    qualityOptions.forEach(option => {
+                        if (option.getAttribute('data-quality') === data.quality ||
+                            (option.getAttribute('data-quality') === 'auto' && data.quality === 'auto')) {
+                            option.classList.add('active');
+                        } else {
+                            option.classList.remove('active');
+                        }
+                    });
+                    
+                    // Remember current time
+                    const currentTime = videoPlayer.currentTime;
+                    
+                    // Create new source elements
+                    const source = document.createElement('source');
+                    source.src = data.url;
+                    source.type = 'video/mp4';
+                    
+                    // Remove existing sources
+                    while (videoPlayer.firstChild) {
+                        videoPlayer.removeChild(videoPlayer.firstChild);
+                    }
+                    
+                    // Add new source
+                    videoPlayer.appendChild(source);
+                    
+                    // Wait for video to load metadata
+                    videoPlayer.addEventListener('loadedmetadata', function onMetadataLoaded() {
+                        // Set time to where we left off
+                        videoPlayer.currentTime = currentTime;
+                        
+                        // Resume playback if it was playing
+                        if (wasPlaying) {
+                            videoPlayer.play()
+                                .then(() => {
+                                    hideQualityChangeOverlay();
+                                })
+                                .catch(error => {
+                                    console.error('Error resuming playback:', error);
+                                    hideQualityChangeOverlay();
+                                });
+                        } else {
+                            hideQualityChangeOverlay();
+                        }
+                        
+                        // Remove this event listener
+                        videoPlayer.removeEventListener('loadedmetadata', onMetadataLoaded);
+                    });
+                    
+                    // Handle loading error
+                    videoPlayer.addEventListener('error', function onLoadError() {
+                        console.error('Error loading video at quality:', data.quality);
+                        hideQualityChangeOverlay();
+                        videoPlayer.removeEventListener('error', onLoadError);
+                    });
+                    
+                    // Load the video
+                    videoPlayer.load();
+                } else {
+                    console.error('Failed to get video URL:', data.error || 'Unknown error');
+                    hideQualityChangeOverlay();
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching video URL:', error);
+                hideQualityChangeOverlay();
+            });
+    }
+    
+    // Function to initialize quality options
+    function initializeQualityOptions(availableQualities) {
+        const qualityOptions = document.getElementById('quality-options');
+        const currentQualityDisplay = document.getElementById('current-quality');
+        
+        if (!qualityOptions || !availableQualities) return;
+        
+        // Clear existing options except 'auto'
+        const autoOption = qualityOptions.querySelector('.quality-option[data-quality="auto"]');
+        qualityOptions.innerHTML = '';
+        
+        if (autoOption) {
+            qualityOptions.appendChild(autoOption);
+        } else {
+            // Create auto option if it doesn't exist
+            const autoDiv = document.createElement('div');
+            autoDiv.className = 'quality-option auto-quality';
+            autoDiv.setAttribute('data-quality', 'auto');
+            autoDiv.innerHTML = `
+                <span class="quality-label">Авто</span>
+                <span class="quality-badge">AI</span>
+            `;
+            qualityOptions.appendChild(autoDiv);
+        }
+        
+        // Define quality info
+        const qualityInfo = {
+            '240p': 'Низкое, экономит трафик',
+            '360p': 'Экономия трафика',
+            '480p': 'Стандартное',
+            '720p': 'HD',
+            '1080p': 'Full HD',
+            'original': 'Оригинал'
+        };
+        
+        // Add available qualities
+        availableQualities.forEach(quality => {
+            if (quality === 'auto') return; // Skip auto, already added
+            
+            const qualityDiv = document.createElement('div');
+            qualityDiv.className = 'quality-option';
+            qualityDiv.setAttribute('data-quality', quality);
+            
+            // Set quality label and info
+            qualityDiv.innerHTML = `
+                <span class="quality-label">${quality}</span>
+                <span class="quality-info">${qualityInfo[quality] || ''}</span>
+            `;
+            
+            qualityOptions.appendChild(qualityDiv);
+        });
+        
+        // Set current quality display
+        if (currentQualityDisplay) {
+            const activeQuality = availableQualities[0] || 'original';
+            currentQualityDisplay.textContent = activeQuality;
+        }
+        
+        // Add event listeners to quality options
+        document.querySelectorAll('.quality-option').forEach(option => {
+            option.addEventListener('click', function() {
+                const quality = this.getAttribute('data-quality');
+                changeVideoQuality(quality);
+                
+                // Hide quality options
+                qualityOptions.classList.remove('active');
+            });
+        });
+    }
 </script>
 {% endblock %}
