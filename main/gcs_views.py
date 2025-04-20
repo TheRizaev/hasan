@@ -726,3 +726,122 @@ def refresh_metadata_cache(request):
             'success': False,
             'error': str(e)
         }, status=500)
+        
+@login_required
+@require_http_methods(["POST"])
+def add_comment(request):
+    """
+    API endpoint to add a new comment (question) to a video
+    """
+    try:
+        # Get data from request
+        text = request.POST.get('text')
+        video_id = request.POST.get('video_id')
+        
+        if not text or not video_id:
+            return JsonResponse({'success': False, 'error': 'Не указан текст комментария или ID видео'}, status=400)
+        
+        # Get user info
+        user = request.user
+        username = user.username
+        
+        # Get video owner info
+        from .gcs_storage import get_video_metadata
+        video_metadata = get_video_metadata(username, video_id)
+        
+        if not video_metadata:
+            return JsonResponse({'success': False, 'error': 'Видео не найдено'}, status=404)
+        
+        video_owner_id = video_metadata.get('user_id')
+        
+        # Add comment to GCS
+        from .gcs_storage import add_comment
+        display_name = user.profile.display_name if hasattr(user, 'profile') and user.profile.display_name else username
+        
+        success = add_comment(
+            user_id=video_owner_id,
+            video_id=video_id,
+            comment_user_id=username,
+            comment_text=text,
+            display_name=display_name
+        )
+        
+        if not success:
+            return JsonResponse({'success': False, 'error': 'Не удалось добавить комментарий'}, status=500)
+        
+        # Return success response with comment data
+        comment_data = {
+            'id': str(uuid.uuid4()),  # Generate random ID for now (GCS should return real ID)
+            'user_id': username,
+            'display_name': display_name,
+            'text': text,
+            'date': datetime.datetime.now().isoformat(),
+            'likes': 0,
+            'replies': []
+        }
+        
+        return JsonResponse({'success': True, 'comment': comment_data})
+        
+    except Exception as e:
+        logger.error(f"Error adding comment: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@login_required
+@require_http_methods(["POST"])
+def add_reply(request):
+    """
+    API endpoint to add a reply to a comment
+    """
+    try:
+        # Get data from request
+        text = request.POST.get('text')
+        comment_id = request.POST.get('comment_id')
+        video_id = request.POST.get('video_id')
+        
+        if not text or not comment_id or not video_id:
+            return JsonResponse({'success': False, 'error': 'Не указаны необходимые данные'}, status=400)
+        
+        # Get user info
+        user = request.user
+        username = user.username
+        
+        # Get video owner info from metadata
+        from .gcs_storage import get_video_metadata
+        video_metadata = get_video_metadata(username, video_id)
+        
+        if not video_metadata:
+            return JsonResponse({'success': False, 'error': 'Видео не найдено'}, status=404)
+        
+        video_owner_id = video_metadata.get('user_id')
+        
+        # Add reply to GCS
+        from .gcs_storage import add_reply
+        display_name = user.profile.display_name if hasattr(user, 'profile') and user.profile.display_name else username
+        
+        success = add_reply(
+            user_id=video_owner_id,
+            video_id=video_id,
+            comment_id=comment_id,
+            reply_user_id=username,
+            reply_text=text,
+            display_name=display_name
+        )
+        
+        if not success:
+            return JsonResponse({'success': False, 'error': 'Не удалось добавить ответ'}, status=500)
+        
+        # Return success response with reply data
+        reply_data = {
+            'id': str(uuid.uuid4()),  # Generate random ID for now (GCS should return real ID)
+            'user_id': username,
+            'display_name': display_name,
+            'text': text,
+            'date': datetime.datetime.now().isoformat(),
+            'likes': 0
+        }
+        
+        return JsonResponse({'success': True, 'reply': reply_data})
+        
+    except Exception as e:
+        logger.error(f"Error adding reply: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
