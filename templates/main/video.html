@@ -121,7 +121,10 @@
                 </div>
                 
                 <div class="quality-options" id="quality-options">
-                    <div class="quality-option" data-quality="auto">авто</div>
+                    <div class="quality-option auto-quality active" data-quality="auto">
+                        <span class="quality-label">авто</span>
+                        <span class="quality-badge">AI</span>
+                    </div>
                     <!-- Quality options will be added dynamically via JavaScript -->
                 </div>
                 
@@ -857,73 +860,35 @@
     }
     
     // Function to initialize quality options
-    function initializeQualityOptions(availableQualities) {
-        const qualityOptions = document.getElementById('quality-options');
-        const currentQualityDisplay = document.getElementById('current-quality');
-        
-        if (!qualityOptions || !availableQualities) return;
-        
-        // Clear existing options except 'auto'
-        const autoOption = qualityOptions.querySelector('.quality-option[data-quality="auto"]');
-        qualityOptions.innerHTML = '';
-        
-        if (autoOption) {
-            qualityOptions.appendChild(autoOption);
-        } else {
-            // Create auto option if it doesn't exist
-            const autoDiv = document.createElement('div');
-            autoDiv.className = 'quality-option auto-quality';
-            autoDiv.setAttribute('data-quality', 'auto');
-            autoDiv.innerHTML = `
-                <span class="quality-label">Авто</span>
-                <span class="quality-badge">AI</span>
-            `;
-            qualityOptions.appendChild(autoDiv);
+    async function initializeQualityOptions() {
+        const videoInfo = await fetchVideoUrl();
+        if (!videoInfo) {
+            console.error('Failed to initialize video');
+            return;
         }
         
-        // Define quality info
-        const qualityInfo = {
-            '240p': 'Низкое, экономит трафик',
-            '360p': 'Экономия трафика',
-            '480p': 'Стандартное',
-            '720p': 'HD',
-            '1080p': 'Full HD',
-            'original': 'Оригинал'
-        };
+        const qualityMenu = document.getElementById('quality-menu');
+        qualityMenu.innerHTML = '<div class="quality-option" data-quality="auto">Auto</div>';
         
-        // Add available qualities
-        availableQualities.forEach(quality => {
-            if (quality === 'auto') return; // Skip auto, already added
-            
-            const qualityDiv = document.createElement('div');
-            qualityDiv.className = 'quality-option';
-            qualityDiv.setAttribute('data-quality', quality);
-            
-            // Set quality label and info
-            qualityDiv.innerHTML = `
-                <span class="quality-label">${quality}</span>
-                <span class="quality-info">${qualityInfo[quality] || ''}</span>
-            `;
-            
-            qualityOptions.appendChild(qualityDiv);
-        });
-        
-        // Set current quality display
-        if (currentQualityDisplay) {
-            const activeQuality = availableQualities[0] || 'original';
-            currentQualityDisplay.textContent = activeQuality;
-        }
-        
-        // Add event listeners to quality options
-        document.querySelectorAll('.quality-option').forEach(option => {
-            option.addEventListener('click', function() {
-                const quality = this.getAttribute('data-quality');
-                changeVideoQuality(quality);
-                
-                // Hide quality options
-                qualityOptions.classList.remove('active');
+        if (videoInfo.availableQualities && videoInfo.availableQualities.length > 0) {
+            videoInfo.availableQualities.forEach(quality => {
+                const option = document.createElement('div');
+                option.className = 'quality-option';
+                option.dataset.quality = quality;
+                option.textContent = quality;
+                qualityMenu.appendChild(option);
             });
-        });
+        } else {
+            const loadingOption = document.createElement('div');
+            loadingOption.className = 'quality-option disabled';
+            loadingOption.textContent = 'Qualities processing...';
+            qualityMenu.appendChild(loadingOption);
+        }
+        
+        document.getElementById('current-quality').textContent = videoInfo.quality || 'Auto';
+        currentQuality = videoInfo.quality || 'auto';
+        videoPlayer.src = videoInfo.url;
+        videoPlayer.load();
     }
 </script>
 {% endblock %}

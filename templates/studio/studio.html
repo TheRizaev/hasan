@@ -13,18 +13,65 @@
         </button>
     </div>
 
-    <div class="form-group">
-        <label for="quality-settings">Настройки качества</label>
+    <div class="form-group quality-settings-section">
+        <label for="quality-settings" class="settings-label">Настройки качества видео</label>
         <div class="quality-options-container">
             <div class="quality-option">
-                <input type="checkbox" id="process_qualities" name="process_qualities" value="true" checked>
-                <label for="process_qualities">Создать версии разного качества (720p, 480p, 360p)</label>
+                <input type="checkbox" id="process_qualities" name="process_qualities" value="true" checked class="quality-checkbox">
+                <label for="process_qualities" class="quality-label">Создать версии разного качества для адаптивного стриминга</label>
             </div>
+            
             <div class="quality-help">
-                <span class="help-icon">💡</span>
+                <div class="help-header">
+                    <span class="help-icon">💡</span>
+                    <span class="help-title">Почему это важно?</span>
+                </div>
                 <div class="help-text">
-                    <p>Эта опция позволяет автоматически создать видео в разных разрешениях для экономии трафика пользователей.</p>
-                    <p>Рекомендуется включить, но обработка видео займет больше времени.</p>
+                    <p>Эта опция автоматически создаст несколько версий вашего видео с разным качеством, что позволит:</p>
+                    <ul class="benefits-list">
+                        <li>Зрителям с медленным интернетом смотреть видео без задержек</li>
+                        <li>Экономить трафик мобильных пользователей</li>
+                        <li>Адаптировать качество под любое устройство</li>
+                    </ul>
+                    <p class="note">Рекомендуется включить, но обработка займет дополнительное время.</p>
+                </div>
+                <div class="processing-steps">
+                    <div class="processing-step">
+                        <div class="step-icon-container mobile">
+                            <span class="processing-step-icon">📱</span>
+                        </div>
+                        <div class="step-details">
+                            <span class="quality-value">360p</span>
+                            <span class="quality-desc">Мобильные устройства</span>
+                        </div>
+                    </div>
+                    <div class="processing-step">
+                        <div class="step-icon-container tablet">
+                            <span class="processing-step-icon">💻</span>
+                        </div>
+                        <div class="step-details">
+                            <span class="quality-value">720p</span>
+                            <span class="quality-desc">Планшеты, ноутбуки</span>
+                        </div>
+                    </div>
+                    <div class="processing-step">
+                        <div class="step-icon-container desktop">
+                            <span class="processing-step-icon">🖥️</span>
+                        </div>
+                        <div class="step-details">
+                            <span class="quality-value">1080p</span>
+                            <span class="quality-desc">Full HD качество</span>
+                        </div>
+                    </div>
+                    <div class="processing-step">
+                        <div class="step-icon-container desktop">
+                            <span class="processing-step-icon">📺</span>
+                        </div>
+                        <div class="step-details">
+                            <span class="quality-value">2160p</span>
+                            <span class="quality-desc">4K качество</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -277,69 +324,92 @@
     </div>
 </div>
 
-<style>
-    .placeholder-animate {
-        position: relative;
-        overflow: hidden;
-    }
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add animation to the quality option steps
+        const steps = document.querySelectorAll('.processing-step');
+        steps.forEach((step, index) => {
+            step.style.animationDelay = `${index * 0.2}s`;
+            step.style.animation = 'fadeInUp 0.5s ease forwards';
+        });
     
-    .placeholder-animate::after {
-        content: "";
-        position: absolute;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        left: 0;
-        transform: translateX(-100%);
-        background-image: linear-gradient(
-            90deg,
-            rgba(255, 255, 255, 0) 0,
-            rgba(255, 255, 255, 0.2) 20%,
-            rgba(255, 255, 255, 0.5) 60%,
-            rgba(255, 255, 255, 0)
-        );
-        animation: shimmer 2s infinite;
-    }
+        // Add event listener to checkbox for visual feedback
+        const qualityCheckbox = document.getElementById('process_qualities');
+        const qualityOptionsContainer = document.querySelector('.quality-options-container');
+        const processingSteps = document.querySelector('.processing-steps');
+        
+        if (qualityCheckbox && processingSteps) {
+            qualityCheckbox.addEventListener('change', function() {
+                if (this.checked) {
+                    processingSteps.style.opacity = '1';
+                    processingSteps.style.transform = 'translateY(0)';
+                    qualityOptionsContainer.style.borderColor = 'var(--accent-color)';
+                } else {
+                    processingSteps.style.opacity = '0.5';
+                    processingSteps.style.transform = 'translateY(10px)';
+                    qualityOptionsContainer.style.borderColor = 'var(--gray-color)';
+                }
+            });
+            
+            // Initialize state based on current checkbox value
+            if (qualityCheckbox.checked) {
+                processingSteps.style.opacity = '1';
+                processingSteps.style.transform = 'translateY(0)';
+            } else {
+                processingSteps.style.opacity = '0.5';
+                processingSteps.style.transform = 'translateY(10px)';
+            }
+        }
+        
+        // Add tooltip functionality
+        const helpIcon = document.querySelector('.help-icon');
+        if (helpIcon) {
+            helpIcon.setAttribute('title', 'Нажмите для дополнительной информации');
+            helpIcon.style.cursor = 'pointer';
+            
+            helpIcon.addEventListener('click', function() {
+                const helpText = document.querySelector('.help-text');
+                if (helpText) {
+                    if (helpText.style.display === 'none') {
+                        helpText.style.display = 'block';
+                        helpText.style.animation = 'fadeIn 0.3s ease';
+                    } else {
+                        helpText.style.animation = 'fadeOut 0.3s ease';
+                        setTimeout(() => {
+                            helpText.style.display = 'none';
+                        }, 300);
+                    }
+                }
+            });
+        }
+    });
     
-    .dark-theme .placeholder-animate::after {
-        background-image: linear-gradient(
-            90deg,
-            rgba(255, 255, 255, 0) 0,
-            rgba(255, 255, 255, 0.1) 20%,
-            rgba(255, 255, 255, 0.2) 60%,
-            rgba(255, 255, 255, 0)
-        );
-    }
-    
-    @keyframes shimmer {
-        100% {
-            transform: translateX(100%);
+    // Add keyframe animations
+    const style = document.createElement('style');
+    style.textContent = `
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
         }
     }
     
-    .placeholder-card {
-        opacity: 0.7;
-        pointer-events: none;
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
     }
     
-    .placeholder-card .video-title,
-    .placeholder-card .video-meta,
-    .placeholder-card .video-description {
-        background-color: rgba(159, 37, 88, 0.1);
-        color: transparent;
-        border-radius: 4px;
+    @keyframes fadeOut {
+        from { opacity: 1; }
+        to { opacity: 0; }
     }
-    
-    .dark-theme .placeholder-card .video-title,
-    .dark-theme .placeholder-card .video-meta,
-    .dark-theme .placeholder-card .video-description {
-        background-color: rgba(159, 37, 88, 0.2);
-    }
-    
-    .placeholder-card .action-btn {
-        opacity: 0.5;
-    }
-</style>
+    `;
+    document.head.appendChild(style);
+</script>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {

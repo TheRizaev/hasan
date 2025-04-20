@@ -1060,6 +1060,7 @@ def get_video_url_with_quality(user_id, video_id, quality=None, expiration_time=
     
     # Check if video has quality variants
     quality_variants = metadata.get('quality_variants', {})
+    available_qualities = metadata.get('available_qualities', [])
     
     # If no quality variants, return the original URL
     if not quality_variants:
@@ -1070,13 +1071,20 @@ def get_video_url_with_quality(user_id, video_id, quality=None, expiration_time=
             'available_qualities': ['original']
         }
     
-    # Get available qualities
-    available_qualities = list(quality_variants.keys())
-    
     # If no quality specified or requested quality not available, use highest available
     if not quality or quality not in available_qualities:
         # Use the highest quality as default (or what's set in metadata)
-        quality = metadata.get('highest_quality', available_qualities[-1])
+        quality = metadata.get('highest_quality', available_qualities[-1] if available_qualities else 'original')
+    
+    # If quality is "original" or the requested quality isn't found in the variants, 
+    # return the original video
+    if quality == 'original' or quality not in quality_variants:
+        original_url = generate_video_url(user_id, video_id, expiration_time=expiration_time)
+        return {
+            'url': original_url,
+            'quality': 'original',
+            'available_qualities': ['original'] + available_qualities
+        }
     
     # Get the path for the selected quality
     quality_path = quality_variants.get(quality, {}).get('path')
@@ -1101,7 +1109,13 @@ def get_video_url_with_quality(user_id, video_id, quality=None, expiration_time=
     
     if not quality_blob.exists():
         logger.error(f"Quality variant {quality} not found for video {video_id}")
-        return None
+        # Fallback to original
+        original_url = generate_video_url(user_id, video_id, expiration_time=expiration_time)
+        return {
+            'url': original_url,
+            'quality': 'original',
+            'available_qualities': ['original'] + available_qualities
+        }
     
     try:
         url = quality_blob.generate_signed_url(
@@ -1121,7 +1135,13 @@ def get_video_url_with_quality(user_id, video_id, quality=None, expiration_time=
     
     except Exception as e:
         logger.error(f"Error generating URL for quality variant: {e}")
-        return None
+        # Fallback to original
+        original_url = generate_video_url(user_id, video_id, expiration_time=expiration_time)
+        return {
+            'url': original_url,
+            'quality': 'original',
+            'available_qualities': ['original'] + available_qualities
+        }
 
 def upload_video_with_quality_processing(user_id, video_file_path, title=None, description=None, process_qualities=True):
     """
@@ -1140,23 +1160,30 @@ def upload_video_with_quality_processing(user_id, video_file_path, title=None, d
     # First upload the original video
     video_id = upload_video(user_id, video_file_path, title, description)
     
-    if not video_id or not process_qualities:
+    if not video_id:
+        logger.error(f"Failed to upload original video, canceling quality processing")
         return video_id
     
-    # Now process different quality variants in the background
-    try:
-        # Import video quality processing functionality
-        from .video_quality import create_quality_variants
+    # Now process different quality variants if requested
+    if process_qualities:
+        try:
+            # Import video quality processing functionality
+            from .video_quality import create_quality_variants
+            
+            logger.info(f"Starting quality variant creation for video {video_id}")
+            
+            # Create quality variants immediately (synchronous)
+            quality_variants = create_quality_variants(video_file_path, user_id, video_id)
+            
+            if quality_variants:
+                logger.info(f"Successfully created {len(quality_variants)} quality variants for video {video_id}")
+            else:
+                logger.warning(f"No quality variants created for video {video_id}")
         
-        # Create quality variants
-        quality_variants = create_quality_variants(video_file_path, user_id, video_id)
-        
-        if quality_variants:
-            logger.info(f"Successfully created {len(quality_variants)} quality variants for video {video_id}")
-        else:
-            logger.warning(f"No quality variants created for video {video_id}")
-    
-    except Exception as e:
-        logger.error(f"Error processing quality variants: {str(e)}")
+        except Exception as e:
+            logger.error(f"Error processing quality variants: {str(e)}")
+            # Continue since the original video was uploaded successfully
+    else:
+        logger.info(f"Quality processing skipped for video {video_id} as requested")
     
     return video_id

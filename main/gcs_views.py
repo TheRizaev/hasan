@@ -6,6 +6,8 @@ from .models import Category, Video
 from django.views.decorators.http import require_http_methods
 from django.conf import settings
 import os
+from .gcs_storage import upload_video_with_quality_processing, get_video_metadata, upload_thumbnail, generate_video_url, get_video_url_with_quality, BUCKET_NAME
+from .video_quality_processor import process_video_quality_async
 import json
 from datetime import datetime, timedelta
 import uuid
@@ -23,7 +25,7 @@ from .gcs_storage import (
     delete_video,
     get_bucket,
     BUCKET_NAME,
-    get_user_profile_from_gcs  # Import this to check current profile before updating
+    get_user_profile_from_gcs
 )
 
 @login_required
@@ -39,8 +41,6 @@ def upload_video_to_gcs(request):
         title = request.POST.get('title')
         description = request.POST.get('description', '')
         category_id = request.POST.get('category')
-        
-        # New parameter to control quality processing
         process_qualities = request.POST.get('process_qualities', 'true').lower() == 'true'
         
         if not video_file or not title:
@@ -52,23 +52,21 @@ def upload_video_to_gcs(request):
         
         # Get username for GCS storage (preserve @ prefix)
         username = request.user.username
+        user_id = f"@{username}" if not username.startswith('@') else username
         
-        # Temporarily save files on server
+        # Temporarily save video file on server
         temp_video_path = os.path.join(temp_dir, f"{uuid.uuid4()}_{video_file.name}")
-        
         with open(temp_video_path, 'wb+') as destination:
             for chunk in video_file.chunks():
                 destination.write(chunk)
         
-        # Upload video to GCS with quality processing
-        from .gcs_storage import upload_video_with_quality_processing
-        
+        # Upload video to GCS
         video_id = upload_video_with_quality_processing(
-            user_id=username,
+            user_id=user_id,
             video_file_path=temp_video_path,
             title=title,
             description=description,
-            process_qualities=process_qualities
+            process_qualities=False  # We'll handle quality processing separately
         )
         
         # If video upload failed
@@ -76,6 +74,15 @@ def upload_video_to_gcs(request):
             if os.path.exists(temp_video_path):
                 os.remove(temp_video_path)
             return JsonResponse({'error': 'Failed to upload video to Google Cloud Storage'}, status=500)
+        
+        # Get the GCS path of the uploaded video
+        metadata = get_video_metadata(user_id, video_id)
+        if not metadata or 'file_path' not in metadata:
+            if os.path.exists(temp_video_path):
+                os.remove(temp_video_path)
+            return JsonResponse({'error': 'Failed to retrieve video metadata'}, status=500)
+        
+        gcs_video_path = f"gs://{BUCKET_NAME}/{metadata['file_path']}"
         
         # Handle thumbnail if present
         thumbnail_url = None
@@ -85,18 +92,16 @@ def upload_video_to_gcs(request):
                 for chunk in thumbnail.chunks():
                     destination.write(chunk)
             
-            thumbnail_success = upload_thumbnail(username, video_id, temp_thumbnail_path)
+            thumbnail_success = upload_thumbnail(user_id, video_id, temp_thumbnail_path)
             
-            # Delete temp thumbnail file
             if os.path.exists(temp_thumbnail_path):
                 os.remove(temp_thumbnail_path)
                 
             if thumbnail_success:
-                # Get thumbnail URL
-                metadata = get_video_metadata(username, video_id)
+                metadata = get_video_metadata(user_id, video_id)
                 if metadata and "thumbnail_path" in metadata:
                     thumbnail_url = generate_video_url(
-                        username, 
+                        user_id, 
                         video_id, 
                         file_path=metadata["thumbnail_path"], 
                         expiration_time=3600
@@ -107,12 +112,10 @@ def upload_video_to_gcs(request):
             os.remove(temp_video_path)
         
         # Get metadata for uploaded video
-        video_metadata = get_video_metadata(username, video_id)
+        video_metadata = get_video_metadata(user_id, video_id)
         
         # Generate temporary URL for video access
-        from .gcs_storage import get_video_url_with_quality
-        
-        video_url_info = get_video_url_with_quality(username, video_id, expiration_time=3600)
+        video_url_info = get_video_url_with_quality(user_id, video_id, expiration_time=3600)
         
         # Add URL to metadata
         if video_metadata:
@@ -124,9 +127,8 @@ def upload_video_to_gcs(request):
             if thumbnail_url:
                 video_metadata['thumbnail_url'] = thumbnail_url
                 
-            # Create or update Video object in database if needed
+            # Create or update Video object in database
             try:
-                # If category exists
                 category = None
                 if category_id:
                     try:
@@ -134,7 +136,6 @@ def upload_video_to_gcs(request):
                     except Category.DoesNotExist:
                         pass
                 
-                # Check if video already exists
                 video_obj, created = Video.objects.get_or_create(
                     title=title,
                     defaults={
@@ -149,7 +150,15 @@ def upload_video_to_gcs(request):
                 video_metadata['video_db_id'] = video_obj.id
             except Exception as db_err:
                 logger.error(f"Error creating database record: {db_err}")
-                # Don't return error since video is already uploaded to GCS
+        
+        # Process quality variants if requested
+        if process_qualities and video_id:
+            try:
+                logger.info(f"Starting quality processing for video {video_id} with process_qualities={process_qualities}")
+                process_video_quality_async(gcs_video_path, user_id, video_id)
+                logger.info(f"Quality processing started for video {video_id}")
+            except Exception as quality_err:
+                logger.error(f"Failed to start quality processing: {quality_err}")
         
         return JsonResponse({
             'success': True,
@@ -472,7 +481,7 @@ def list_user_videos(request, username=None):
             'success': False,
             'error': str(e),
             'videos': []
-        }, status=500)
+        }, status=500)            
 
 # Улучшенная функция для генерации URL
 def generate_video_url(user_id, video_id, file_path=None, expiration_time=3600):
