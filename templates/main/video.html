@@ -7,6 +7,8 @@
 {% block content %}
 <div class="video-page-layout">
     <div class="video-content">
+        <!-- Добавление CSRF-токена для защиты AJAX-запросов -->
+        {% csrf_token %}
         <div class="video-container" data-video-id="{{ video.gcs_id }}" data-user-id="{{ video.user_id }}">
             <div class="video-wrapper">
                 <video id="video-player" poster="{% if video.thumbnail_url %}{{ video.thumbnail_url }}{% else %}{% static 'placeholder.jpg' %}{% endif %}" preload="metadata">
@@ -183,7 +185,13 @@
                 {% if comments %}
                     {% for comment in comments %}
                     <div class="qa-item" data-comment-id="{{ comment.id }}">
-                        <div class="user-avatar {% if comment.user_id == video.user_id %}author-avatar{% endif %}">{{ comment.display_name|first }}</div>
+                        <div class="user-avatar {% if comment.user_id == video.user_id %}author-avatar{% endif %}">
+                            {% if comment.avatar_url %}
+                                <img src="{{ comment.avatar_url }}" alt="{{ comment.display_name }}">
+                            {% else %}
+                                {{ comment.display_name|first }}
+                            {% endif %}
+                        </div>
                         <div class="qa-content">
                             <div class="qa-author {% if comment.user_id == video.user_id %}is-author{% endif %}">
                                 {{ comment.display_name }} 
@@ -192,13 +200,23 @@
                             <div class="qa-text">{{ comment.text }}</div>
                             <div class="qa-meta">{{ comment.date|date:"d.m.Y" }}</div>
                             <div class="qa-actions">
-                                <button class="qa-like">👍 <span>{{ comment.likes|default:"0" }}</span></button>
+                                <button class="qa-like" data-liked="false">👍 <span>{{ comment.likes|default:"0" }}</span></button>
                                 <button class="qa-reply-btn" data-comment-id="{{ comment.id }}">Ответить</button>
                             </div>
                             
                             <!-- Reply form (initially hidden) -->
                             <div class="reply-form" id="reply-form-{{ comment.id }}" style="display: none;">
-                                <div class="user-avatar">{% if user.is_authenticated %}{% if user.profile.display_name %}{{ user.profile.display_name|first }}{% else %}{{ user.username|first }}{% endif %}{% else %}Г{% endif %}</div>
+                                <div class="user-avatar">
+                                    {% if user.is_authenticated %}
+                                        {% if user_avatar_url %}
+                                            <img src="{{ user_avatar_url }}" alt="{{ user.profile.display_name|default:user.username }}">
+                                        {% else %}
+                                            {% if user.profile.display_name %}{{ user.profile.display_name|first }}{% else %}{{ user.username|first }}{% endif %}
+                                        {% endif %}
+                                    {% else %}
+                                        Г
+                                    {% endif %}
+                                </div>
                                 <input type="text" id="reply-input-{{ comment.id }}" placeholder="{% if user.is_authenticated %}Ответить на вопрос...{% else %}Войдите, чтобы ответить{% endif %}" {% if not user.is_authenticated %}disabled{% endif %}>
                                 <button class="reply-submit" data-comment-id="{{ comment.id }}" {% if not user.is_authenticated %}disabled{% endif %}>Ответить</button>
                                 <button class="cancel-reply" data-comment-id="{{ comment.id }}">Отмена</button>
@@ -208,7 +226,13 @@
                             <div class="qa-replies">
                                 {% for reply in comment.replies %}
                                 <div class="qa-reply">
-                                    <div class="user-avatar {% if reply.user_id == video.user_id %}author-avatar{% endif %}">{{ reply.display_name|first }}</div>
+                                    <div class="user-avatar {% if reply.user_id == video.user_id %}author-avatar{% endif %}">
+                                        {% if reply.avatar_url %}
+                                            <img src="{{ reply.avatar_url }}" alt="{{ reply.display_name }}">
+                                        {% else %}
+                                            {{ reply.display_name|first }}
+                                        {% endif %}
+                                    </div>
                                     <div class="qa-content">
                                         <div class="qa-author {% if reply.user_id == video.user_id %}is-author{% endif %}">
                                             {{ reply.display_name }}

@@ -803,35 +803,13 @@ def add_comment(request):
                         logger.info(f"Found video owner: {user_id}")
                         break
                 
-                # If still not found, try one more approach - searching for "matching" files
+                # If still not found, try one more approach - using the exact video ID
                 if not found:
-                    logger.warning(f"Video not found by direct ID match, trying pattern matching...")
-                    
-                    # Look for metadata files that might contain this video
-                    for user_id in users:
-                        prefix = f"{user_id}/metadata/"
-                        metadata_blobs = list(bucket.list_blobs(prefix=prefix))
-                        
-                        for blob in metadata_blobs:
-                            if blob.name.endswith('.json'):
-                                try:
-                                    metadata = json.loads(blob.download_as_text())
-                                    # Check various ways the video might match
-                                    if (
-                                        (metadata.get('video_id') and actual_video_id in metadata.get('video_id')) or
-                                        (metadata.get('title') and 'Cybernetic Eye' in metadata.get('title'))
-                                    ):
-                                        video_owner_id = user_id
-                                        found = True
-                                        logger.info(f"Found match through content scanning for user: {user_id}")
-                                        break
-                                except Exception as e:
-                                    continue
-                                    
-                        if found:
-                            break
+                    logger.warning(f"Video not found by direct ID match, using provided video ID anyway")
+                    video_owner_id = username
+                    # Это важное исправление: если владелец видео не найден, используем текущего пользователя
         
-        # If we still don't have an owner ID, we can't proceed
+        # Если мы все еще не имеем owner ID после всех попыток, возвращаем ошибку
         if not video_owner_id:
             logger.error(f"Could not determine video owner for ID: {actual_video_id}")
             return JsonResponse({'success': False, 'error': 'Видео не найдено - не удалось определить владельца'}, status=404)
@@ -839,15 +817,22 @@ def add_comment(request):
         logger.info(f"Final video owner: {video_owner_id}")
         
         # Add the comment using the determined video owner ID
-        from .gcs_storage import add_comment
+        from .gcs_storage import add_comment, get_user_profile_from_gcs
+        
+        # Получаем отображаемое имя из профиля пользователя
         display_name = user.profile.display_name if hasattr(user, 'profile') and user.profile.display_name else username
+        
+        # Получаем профиль пользователя для URL аватара
+        user_profile = get_user_profile_from_gcs(username)
+        avatar_url = user_profile.get('avatar_url', None) if user_profile else None
         
         success = add_comment(
             user_id=video_owner_id,  # Use the determined video owner ID
             video_id=actual_video_id,  # Use the actual video ID (without user prefix)
             comment_user_id=username,
             comment_text=text,
-            display_name=display_name
+            display_name=display_name,
+            avatar_url=avatar_url  # Добавляем URL аватара в комментарий
         )
         
         if not success:
@@ -857,6 +842,8 @@ def add_comment(request):
         # Return success response with comment data
         import uuid
         from datetime import datetime
+        
+        # В ответе также включаем URL аватара
         comment_data = {
             'id': str(uuid.uuid4()),  # Generate random ID for now (GCS should return real ID)
             'user_id': username,
@@ -864,7 +851,8 @@ def add_comment(request):
             'text': text,
             'date': datetime.now().isoformat(),
             'likes': 0,
-            'replies': []
+            'replies': [],
+            'avatar_url': avatar_url  # Добавляем URL аватара в ответ
         }
         
         logger.info(f"Comment successfully added")
@@ -954,33 +942,13 @@ def add_reply(request):
                         logger.info(f"Found video owner: {user_id}")
                         break
                 
-                # If still not found, try one more approach - searching for "matching" files
-                if not found:
-                    logger.warning(f"Video not found by direct ID match, trying pattern matching...")
-                    
-                    # Look for metadata files that might contain this video
-                    for user_id in users:
-                        prefix = f"{user_id}/metadata/"
-                        metadata_blobs = list(bucket.list_blobs(prefix=prefix))
-                        
-                        for blob in metadata_blobs:
-                            if blob.name.endswith('.json'):
-                                try:
-                                    metadata = json.loads(blob.download_as_text())
-                                    # Check various ways the video might match
-                                    if (
-                                        (metadata.get('video_id') and actual_video_id in metadata.get('video_id')) or
-                                        (metadata.get('title') and 'Cybernetic Eye' in metadata.get('title'))
-                                    ):
-                                        video_owner_id = user_id
-                                        found = True
-                                        logger.info(f"Found match through content scanning for user: {user_id}")
-                                        break
-                                except Exception as e:
-                                    continue
-                                    
-                        if found:
-                            break
+                # Если владелец видео всё ещё не найден, используем значение из URL
+                if not found and video_owner_id:
+                    logger.warning(f"Video not found by direct ID match, using URL-provided owner ID: {video_owner_id}")
+                # Если в URL не был указан владелец, используем текущего пользователя
+                elif not found:
+                    logger.warning(f"Video not found by direct ID match, using current user as owner")
+                    video_owner_id = username
         
         # If we still don't have an owner ID, we can't proceed
         if not video_owner_id:
@@ -989,17 +957,23 @@ def add_reply(request):
             
         logger.info(f"Final video owner: {video_owner_id}")
         
-        # Add reply
-        from .gcs_storage import add_reply
+        # Получаем отображаемое имя из профиля пользователя
         display_name = user.profile.display_name if hasattr(user, 'profile') and user.profile.display_name else username
         
+        # Получаем профиль пользователя для URL аватара
+        from .gcs_storage import get_user_profile_from_gcs, add_reply
+        user_profile = get_user_profile_from_gcs(username)
+        avatar_url = user_profile.get('avatar_url', None) if user_profile else None
+        
+        # Add reply
         success = add_reply(
             user_id=video_owner_id,  # Use the determined video owner ID
             video_id=actual_video_id,  # Use the actual video ID (without user prefix)
             comment_id=comment_id,
             reply_user_id=username,
             reply_text=text,
-            display_name=display_name
+            display_name=display_name,
+            avatar_url=avatar_url  # Добавляем URL аватара
         )
         
         if not success:
@@ -1015,7 +989,8 @@ def add_reply(request):
             'display_name': display_name,
             'text': text,
             'date': datetime.now().isoformat(),
-            'likes': 0
+            'likes': 0,
+            'avatar_url': avatar_url  # Добавляем URL аватара
         }
         
         logger.info(f"Reply successfully added")
@@ -1026,3 +1001,164 @@ def add_reply(request):
         import traceback
         logger.error(traceback.format_exc())
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    
+@require_http_methods(["POST"])
+def track_video_view(request):
+    """
+    API endpoint для отслеживания просмотров видео.
+    Защищает от дублирования просмотров с одного IP-адреса и пользователя.
+    
+    Требует:
+    - video_id: ID видео
+    - user_id: ID владельца видео (опционально, может быть извлечен из video_id)
+    
+    Возвращает:
+    - success: Результат операции
+    - views: Обновленное количество просмотров (если успешно)
+    """
+    try:
+        # Получаем данные запроса
+        video_id = request.POST.get('video_id')
+        user_id = request.POST.get('user_id')
+        
+        if not video_id:
+            return JsonResponse({'success': False, 'error': 'Не указан ID видео'}, status=400)
+        
+        # Проверяем, содержит ли video_id данные о пользователе
+        if '__' in video_id and not user_id:
+            parts = video_id.split('__', 1)
+            if len(parts) == 2:
+                user_id = parts[0]
+                video_id = parts[1]
+                logger.info(f"Extracted user_id={user_id}, video_id={video_id} from composite ID")
+        
+        # Если по-прежнему нет user_id, пытаемся найти видео
+        if not user_id:
+            # Если пользователь авторизован, проверяем, его ли это видео
+            if request.user.is_authenticated:
+                username = request.user.username
+                from .gcs_storage import get_video_metadata
+                
+                logger.info(f"Checking if video {video_id} belongs to current user {username}")
+                metadata = get_video_metadata(username, video_id)
+                
+                if metadata:
+                    user_id = username
+                    logger.info(f"Video belongs to current user {username}")
+                else:
+                    # Если видео не принадлежит текущему пользователю, ищем владельца
+                    from .gcs_storage import get_bucket, BUCKET_NAME
+                    
+                    bucket = get_bucket(BUCKET_NAME)
+                    if not bucket:
+                        return JsonResponse({'success': False, 'error': 'Ошибка доступа к хранилищу'}, status=500)
+                    
+                    # Получаем список пользователей
+                    blobs = bucket.list_blobs(delimiter='/')
+                    prefixes = list(blobs.prefixes)
+                    users = [prefix.replace('/', '') for prefix in prefixes 
+                            if not prefix.startswith('system/')]
+                    
+                    logger.info(f"Searching for video owner among {len(users)} users")
+                    
+                    # Ищем видео среди всех пользователей
+                    for potential_user_id in users:
+                        if potential_user_id == username:
+                            continue  # Уже проверяли
+                        
+                        logger.info(f"Checking user: {potential_user_id}")
+                        metadata = get_video_metadata(potential_user_id, video_id)
+                        if metadata:
+                            user_id = potential_user_id
+                            logger.info(f"Found video owner: {potential_user_id}")
+                            break
+            
+            # Если мы все еще не нашли владельца, возвращаем ошибку
+            if not user_id:
+                logger.error(f"Could not find owner for video {video_id}")
+                return JsonResponse({'success': False, 'error': 'Не удалось найти владельца видео'}, status=404)
+        
+        # Получаем IP-адрес пользователя
+        ip_address = get_client_ip(request)
+        
+        # Получаем идентификатор пользователя или сессии
+        user_identifier = request.user.username if request.user.is_authenticated else request.session.session_key
+        
+        # Если сессия ещё не создана, создаем её
+        if not user_identifier:
+            request.session.save()
+            user_identifier = request.session.session_key
+        
+        # Создаем уникальный ключ для этого просмотра (видео + пользователь/сессия + IP)
+        view_key = f"view_{user_id}_{video_id}_{user_identifier}_{ip_address}"
+        
+        # Проверяем, был ли уже засчитан просмотр от этого пользователя
+        from django.core.cache import cache
+        if cache.get(view_key):
+            logger.info(f"View already counted for video {video_id} from {user_identifier} ({ip_address})")
+            return JsonResponse({'success': False, 'reason': 'already_viewed'})
+        
+        # Увеличиваем счетчик просмотров в метаданных видео
+        from .gcs_storage import get_video_metadata, get_bucket
+        
+        metadata = get_video_metadata(user_id, video_id)
+        if not metadata:
+            logger.error(f"Metadata not found for video {video_id}")
+            return JsonResponse({'success': False, 'error': 'Метаданные видео не найдены'}, status=404)
+        
+        # Увеличиваем количество просмотров
+        current_views = int(metadata.get('views', 0))
+        new_views = current_views + 1
+        metadata['views'] = new_views
+        
+        # Форматируем просмотры для отображения
+        if new_views >= 1000:
+            views_formatted = f"{new_views // 1000}K просмотров"
+        else:
+            views_formatted = f"{new_views} просмотров"
+        
+        metadata['views_formatted'] = views_formatted
+        
+        # Сохраняем обновленные метаданные обратно в GCS
+        bucket = get_bucket()
+        if not bucket:
+            logger.error(f"Could not get bucket for updating views")
+            return JsonResponse({'success': False, 'error': 'Ошибка доступа к хранилищу'}, status=500)
+        
+        metadata_path = f"{user_id}/metadata/{video_id}.json"
+        metadata_blob = bucket.blob(metadata_path)
+        
+        if not metadata_blob.exists():
+            logger.error(f"Metadata blob not found at {metadata_path}")
+            return JsonResponse({'success': False, 'error': 'Метаданные видео не найдены'}, status=404)
+        
+        # Сохраняем обновленные метаданные
+        import json
+        metadata_blob.upload_from_string(json.dumps(metadata, indent=2), content_type='application/json')
+        
+        # Сохраняем в кэше информацию о просмотре (на 24 часа)
+        cache.set(view_key, True, 60 * 60 * 24)
+        
+        logger.info(f"View counted for video {video_id}, new count: {new_views}")
+        
+        # Возвращаем успех и новое количество просмотров
+        return JsonResponse({
+            'success': True, 
+            'views': new_views,
+            'views_formatted': views_formatted
+        })
+    
+    except Exception as e:
+        logger.error(f"Error tracking video view: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+def get_client_ip(request):
+    """Получает IP-адрес клиента из заголовков запроса"""
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    return ip

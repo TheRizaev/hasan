@@ -33,6 +33,7 @@ urlpatterns = [
     # Маршрут для получения комментарий видео
     path('api/add-comment/', gcs_views.add_comment, name='add_comment'),
     path('api/add-reply/', gcs_views.add_reply, name='add_reply'),
+    path('api/track-view/', gcs_views.track_video_view, name='track_video_view'),
 ]
 
 if settings.DEBUG:

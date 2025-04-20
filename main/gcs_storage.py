@@ -432,8 +432,8 @@ def upload_thumbnail(user_id, video_id, thumbnail_file_path):
         logger.error(f"Error uploading thumbnail: {e}")
         return False
 
-def add_comment(user_id, video_id, comment_user_id, comment_text, display_name=None):
-    """Добавляет комментарий к видео"""
+def add_comment(user_id, video_id, comment_user_id, comment_text, display_name=None, avatar_url=None):
+    """Добавляет комментарий к видео с поддержкой URL аватара"""
     bucket = get_bucket()
     if not bucket:
         logger.error(f"Could not get bucket for adding comment")
@@ -452,7 +452,7 @@ def add_comment(user_id, video_id, comment_user_id, comment_text, display_name=N
         # Генерируем уникальный ID комментария
         comment_id = str(uuid.uuid4())
         
-        # Добавляем новый комментарий
+        # Добавляем новый комментарий с URL аватара
         new_comment = {
             "id": comment_id,
             "user_id": comment_user_id,
@@ -462,6 +462,10 @@ def add_comment(user_id, video_id, comment_user_id, comment_text, display_name=N
             "likes": 0,
             "replies": []
         }
+        
+        # Добавляем URL аватара, если он предоставлен
+        if avatar_url:
+            new_comment["avatar_url"] = avatar_url
         
         comments_data["comments"].append(new_comment)
         
@@ -475,8 +479,9 @@ def add_comment(user_id, video_id, comment_user_id, comment_text, display_name=N
         logger.error(f"Error adding comment: {e}")
         return False
 
-def add_reply(user_id, video_id, comment_id, reply_user_id, reply_text, display_name=None):
-    """Добавляет ответ на комментарий"""
+# Исправление функции добавления ответа, чтобы включать URL аватара
+def add_reply(user_id, video_id, comment_id, reply_user_id, reply_text, display_name=None, avatar_url=None):
+    """Добавляет ответ на комментарий с поддержкой URL аватара"""
     bucket = get_bucket()
     if not bucket:
         logger.error(f"Could not get bucket for adding reply")
@@ -500,7 +505,7 @@ def add_reply(user_id, video_id, comment_id, reply_user_id, reply_text, display_
                 # Генерируем уникальный ID ответа
                 reply_id = str(uuid.uuid4())
                 
-                # Создаем объект ответа
+                # Создаем объект ответа с URL аватара
                 reply = {
                     "id": reply_id,
                     "user_id": reply_user_id,
@@ -509,6 +514,10 @@ def add_reply(user_id, video_id, comment_id, reply_user_id, reply_text, display_
                     "date": datetime.now().isoformat(),
                     "likes": 0
                 }
+                
+                # Добавляем URL аватара, если он предоставлен
+                if avatar_url:
+                    reply["avatar_url"] = avatar_url
                 
                 # Добавляем ответ к комментарию
                 if "replies" not in comment:
