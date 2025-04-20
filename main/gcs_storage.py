@@ -1172,7 +1172,7 @@ def upload_video_with_quality_processing(user_id, video_file_path, title=None, d
             
             logger.info(f"Starting quality variant creation for video {video_id}")
             
-            # Create quality variants immediately (synchronous)
+            # Create quality variants synchronously
             quality_variants = create_quality_variants(video_file_path, user_id, video_id)
             
             if quality_variants:

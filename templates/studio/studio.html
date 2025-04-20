@@ -172,12 +172,14 @@
                 <div class="upload-success" style="display: none;">
                     <div class="success-icon">✅</div>
                     <h3>Видео успешно загружено!</h3>
-                    <p>Ваше видео загружено и будет доступно после обработки.</p>
+                    <p>Ваше видео было загружено и обработано во всех выбранных качествах.</p>
                     
                     <div class="quality-processing">
-                        <h4><span class="icon">⚙️</span> Обработка разрешений <span class="processing-badge">В процессе</span></h4>
-                        <p>Ваше видео обрабатывается для создания версий разного качества. Это может занять некоторое время в зависимости от размера и длительности видео.</p>
-                        <p>Вы можете закрыть это окно. Все версии качества будут доступны автоматически после обработки.</p>
+                        <h4><span class="icon">✅</span> Обработка завершена</h4>
+                        <p>Видео доступно в следующих вариантах качества:</p>
+                        <div class="quality-list">
+                            <!-- Качества будут заполнены динамически -->
+                        </div>
                     </div>
                     
                     <button class="close-success-btn">Закрыть</button>
@@ -914,13 +916,20 @@
                 progressBar.style.width = percent + '%';
                 progressPercentage.textContent = percent + '%';
                 
-                if (percent > 0 && percent <= 33) {
+                if (percent > 0 && percent <= 20) {
                     progressMessage.textContent = 'Загрузка видео в Google Cloud Storage...';
-                } else if (percent > 33 && percent <= 66) {
+                } else if (percent > 20 && percent <= 40) {
+                    updateStep('upload');
+                    progressMessage.textContent = 'Загрузка видео...';
+                } else if (percent > 40 && percent <= 60) {
                     updateStep('process');
-                    progressMessage.textContent = 'Обработка видео...';
-                } else if (percent > 66) {
-                    progressMessage.textContent = 'Создание метаданных...';
+                    progressMessage.textContent = 'Обработка оригинального видео...';
+                } else if (percent > 60 && percent <= 80) {
+                    progressMessage.textContent = processQualities ? 
+                        'Создание версий различного качества...' : 
+                        'Создание метаданных...';
+                } else if (percent > 80) {
+                    progressMessage.textContent = 'Финальная обработка...';
                 }
             }
         });
@@ -935,10 +944,10 @@
                         // Complete progress bar
                         progressBar.style.width = '100%';
                         progressPercentage.textContent = '100%';
-                        progressMessage.textContent = 'Загрузка завершена!';
+                        progressMessage.textContent = 'Загрузка и обработка завершены!';
                         updateStep('complete');
                         
-                        // Show success message
+                        // Show success message with quality info
                         setTimeout(function() {
                             document.querySelector('.upload-progress-container').style.display = 'none';
                             
@@ -947,10 +956,31 @@
                             
                             // Update quality processing message based on settings
                             const qualityProcessingSection = successElement.querySelector('.quality-processing');
-                            if (processQualities) {
+                            const qualityList = qualityProcessingSection.querySelector('.quality-list');
+                            
+                            if (processQualities && response.metadata && response.metadata.available_qualities) {
                                 qualityProcessingSection.style.display = 'block';
+                                
+                                // Display available qualities
+                                qualityList.innerHTML = '';
+                                
+                                if (response.metadata.available_qualities.length > 0) {
+                                    const qualitiesHTML = response.metadata.available_qualities
+                                        .map(q => `<div class="quality-badge">${q}</div>`)
+                                        .join('');
+                                    
+                                    qualityList.innerHTML = qualitiesHTML;
+                                } else {
+                                    qualityList.innerHTML = '<p>Обработка видео завершена, но не удалось создать дополнительные версии качества.</p>';
+                                }
                             } else {
-                                qualityProcessingSection.style.display = 'none';
+                                if (processQualities) {
+                                    qualityProcessingSection.innerHTML = '<h4><span class="icon">⚠️</span> Информация о качестве недоступна</h4>' +
+                                        '<p>Видео было загружено, но информация о доступных качествах не получена.</p>';
+                                    qualityProcessingSection.style.display = 'block';
+                                } else {
+                                    qualityProcessingSection.style.display = 'none';
+                                }
                             }
                         }, 1000);
                         

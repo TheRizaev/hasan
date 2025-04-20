@@ -35,7 +35,8 @@ def process_video_quality_async(video_file_path, user_id, video_id):
 
 def run_quality_processing(video_file_path, user_id, video_id):
     """
-    Run the quality processing in a background thread
+    Run the quality processing in a background thread.
+    This is used as a fallback when synchronous processing fails.
     
     Args:
         video_file_path (str): Path to the video file (local or gs:// path)
@@ -49,7 +50,16 @@ def run_quality_processing(video_file_path, user_id, video_id):
         # Sleep for a moment to allow the main request to complete
         time.sleep(2)
         
-        logger.info(f"Starting quality processing for video {video_id} from file {video_file_path}")
+        logger.info(f"Starting background quality processing for video {video_id} from file {video_file_path}")
+        
+        # Get existing metadata
+        from .gcs_storage import get_video_metadata
+        metadata = get_video_metadata(user_id, video_id)
+        
+        # Check if quality variants already exist
+        if metadata and 'quality_variants' in metadata and metadata['quality_variants']:
+            logger.info(f"Video {video_id} already has quality variants, skipping processing")
+            return
         
         # Import here to avoid circular imports
         from .video_quality import create_quality_variants

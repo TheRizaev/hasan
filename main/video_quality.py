@@ -56,32 +56,49 @@ def get_video_info(video_path):
             '-show_entries', 'format=duration', '-of', 'json', video_path
         ]
         
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        logger.info(f"Running ffprobe command: {' '.join(cmd)}")
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
         if result.returncode != 0:
             logger.error(f"ffprobe error: {result.stderr}")
+            logger.error(f"ffprobe output: {result.stdout}")
             raise Exception(f"ffprobe exited with code {result.returncode}")
+        
+        logger.info(f"ffprobe result: {result.stdout}")
         
         import json
         data = json.loads(result.stdout)
         stream_data = data.get('streams', [{}])[0]
         format_data = data.get('format', {})
         
+        width = stream_data.get('width')
+        height = stream_data.get('height')
+        
+        logger.info(f"Detected video dimensions: {width}x{height}")
+        
         framerate = stream_data.get('r_frame_rate', '30/1')
         if '/' in framerate:
-            num, den = map(int, framerate.split('/'))
-            framerate = round(num / den, 2)
+            try:
+                num, den = map(int, framerate.split('/'))
+                framerate = round(num / den, 2)
+            except (ValueError, ZeroDivisionError):
+                framerate = 30.0
         else:
-            framerate = float(framerate)
+            try:
+                framerate = float(framerate)
+            except ValueError:
+                framerate = 30.0
         
         return {
-            'width': stream_data.get('width'),
-            'height': stream_data.get('height'),
+            'width': width,
+            'height': height,
             'codec': stream_data.get('codec_name'),
             'duration': float(format_data.get('duration', 0)),
             'framerate': framerate
         }
     except Exception as e:
         logger.error(f"Error getting video info: {str(e)}")
+        # Return default values with None for dimensions
         return {'width': None, 'height': None, 'codec': None, 'duration': 0, 'framerate': 30}
 
 def process_video_quality(video_file_path, user_id, video_id, bucket_name):
@@ -93,6 +110,9 @@ def process_video_quality(video_file_path, user_id, video_id, bucket_name):
     # Get video info to determine which qualities to process
     video_info = get_video_info(video_file_path)
     video_height = video_info.get('height', 0)
+    video_width = video_info.get('width', 0)
+    
+    logger.info(f"Original video dimensions: {video_width}x{video_height}")
     
     # Filter quality presets based on input video resolution
     applicable_qualities = {
@@ -104,27 +124,64 @@ def process_video_quality(video_file_path, user_id, video_id, bucket_name):
         logger.warning(f"No applicable quality presets for video resolution {video_height}p")
         return quality_paths
     
+    import tempfile
+    temp_dir = tempfile.mkdtemp()
+    
     for quality, preset in applicable_qualities.items():
-        output_path = f"gs://{bucket_name}/{user_id}/videos/{video_id}_{quality}.mp4"
+        target_width, target_height = map(int, preset['resolution'].split('x'))
+        
+        # Create a more reliable scaling filter
+        scale_filter = f"scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2:color=black"
+        
+        output_path = os.path.join(temp_dir, f"{video_id}_{quality}.mp4")
+        
         cmd = [
             ffmpeg_path, '-i', video_file_path,
-            '-vf', f"scale={preset['resolution']}:force_original_aspect_ratio=decrease,pad={preset['resolution']}:(ow-iw)/2:(oh-ih)/2",
+            '-vf', scale_filter,
             '-c:v', 'libx264', '-b:v', preset['bitrate'],
             '-c:a', 'aac', '-b:a', preset['audio_bitrate'],
             '-preset', 'medium', '-y', output_path
         ]
+        
         logger.info(f"Running FFmpeg command: {' '.join(cmd)}")
         
         try:
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-            stdout, stderr = process.communicate()
-            if process.returncode == 0:
-                logger.info(f"Successfully created {quality} variant at {output_path}")
-                quality_paths[quality] = output_path
-            else:
-                logger.error(f"FFmpeg failed for {quality}: {stderr}")
+            process = subprocess.run(cmd, capture_output=True, text=True, check=False)
+            if process.returncode != 0:
+                logger.error(f"FFmpeg error for {quality}: {process.stderr}")
+                continue
+                
+            # Check if output file exists and has size
+            if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+                logger.error(f"Output file for {quality} was not created or is empty")
+                continue
+                
+            # Upload to GCS
+            from google.cloud import storage
+            client = storage.Client()
+            bucket = client.bucket(bucket_name)
+            
+            gcs_path = f"{user_id}/videos/{video_id}_{quality}.mp4"
+            blob = bucket.blob(gcs_path)
+            blob.upload_from_filename(output_path, content_type='video/mp4')
+            
+            logger.info(f"Successfully created {quality} variant at {gcs_path}")
+            quality_paths[quality] = gcs_path
+            
+            # Clean up temporary file
+            try:
+                os.remove(output_path)
+            except Exception as e:
+                logger.warning(f"Could not remove temporary file {output_path}: {e}")
+                
         except Exception as e:
             logger.error(f"Error processing {quality}: {str(e)}")
+    
+    # Clean up temp directory
+    try:
+        os.rmdir(temp_dir)
+    except Exception as e:
+        logger.warning(f"Could not remove temp directory {temp_dir}: {e}")
     
     return quality_paths
 
@@ -132,41 +189,122 @@ def create_quality_variants(video_file_path, user_id, video_id):
     """Create quality variants for a video and update its metadata"""
     from .gcs_storage import get_bucket, get_video_metadata, BUCKET_NAME
     import json
+    import os
+    import tempfile
+    import subprocess
     
     logger.info(f"Processing quality variants for video {video_id}")
     
     try:
-        # Process video qualities
-        quality_paths = process_video_quality(video_file_path, user_id, video_id, BUCKET_NAME)
-        if not quality_paths:
-            logger.error(f"No quality variants created for video {video_id}")
-            raise RuntimeError("Failed to create quality variants")
+        # Get video info to determine which qualities to process
+        video_info = get_video_info(video_file_path)
+        video_height = video_info.get('height', 0)
+        video_width = video_info.get('width', 0)
         
+        logger.info(f"Original video dimensions: {video_width}x{video_height}")
+        
+        # Filter quality presets based on input video resolution
+        applicable_qualities = {
+            q: p for q, p in QUALITY_PRESETS.items()
+            if int(p['resolution'].split('x')[1]) <= video_height
+        }
+        
+        if not applicable_qualities:
+            logger.warning(f"No applicable quality presets for video resolution {video_height}p")
+            return {}
+            
         # Get GCS bucket
         bucket = get_bucket(BUCKET_NAME)
         if not bucket:
             logger.error(f"Could not get bucket {BUCKET_NAME}")
             raise RuntimeError(f"Could not get bucket {BUCKET_NAME}")
+            
+        # Create temporary directory for processed videos
+        temp_dir = tempfile.mkdtemp()
         
+        # Process each quality variant
+        quality_variants = {}
+        for quality, preset in applicable_qualities.items():
+            logger.info(f"Processing {quality} variant for video {video_id}")
+            
+            try:
+                # Set output path for processed video
+                output_path = os.path.join(temp_dir, f"{video_id}_{quality}.mp4")
+                
+                # Calculate aspect ratio to maintain proportions
+                target_width, target_height = map(int, preset['resolution'].split('x'))
+                
+                # Use a simplified scale filter that maintains aspect ratio
+                scale_filter = f"scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2:color=black"
+                
+                # Process video to target quality
+                ffmpeg_path = get_ffmpeg_path()
+                cmd = [
+                    ffmpeg_path, '-i', video_file_path,
+                    '-vf', scale_filter,
+                    '-c:v', 'libx264', '-b:v', preset['bitrate'],
+                    '-c:a', 'aac', '-b:a', preset['audio_bitrate'],
+                    '-preset', 'medium', '-y', output_path
+                ]
+                
+                logger.info(f"Running FFmpeg command: {' '.join(cmd)}")
+                
+                process = subprocess.run(cmd, capture_output=True, text=True, check=False)
+                
+                if process.returncode != 0:
+                    logger.error(f"FFmpeg error for {quality}: {process.stderr}")
+                    continue
+                    
+                # Check if the output file exists and has size
+                if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+                    logger.error(f"Output file for {quality} was not created or is empty")
+                    continue
+                
+                # Upload processed video to GCS
+                target_path = f"{user_id}/videos/{video_id}_{quality}.mp4"
+                blob = bucket.blob(target_path)
+                blob.upload_from_filename(output_path, content_type='video/mp4')
+                
+                # Add to quality variants
+                quality_variants[quality] = {
+                    'path': target_path,
+                    'resolution': preset['resolution'],
+                    'bitrate': preset['bitrate']
+                }
+                
+                logger.info(f"Successfully created and uploaded {quality} variant for video {video_id}")
+                
+                # Clean up temporary file
+                try:
+                    if os.path.exists(output_path):
+                        os.remove(output_path)
+                except Exception as e:
+                    logger.warning(f"Could not remove temporary file {output_path}: {e}")
+                
+            except Exception as e:
+                logger.error(f"Error processing {quality} variant: {str(e)}")
+        
+        # Clean up temp directory
+        try:
+            os.rmdir(temp_dir)
+        except Exception as e:
+            logger.warning(f"Could not remove temp directory {temp_dir}: {e}")
+        
+        if not quality_variants:
+            logger.warning(f"No quality variants were successfully created for video {video_id}")
+            return {}
+            
         # Get existing metadata
         metadata = get_video_metadata(user_id, video_id)
         if not metadata:
             logger.error(f"Could not get metadata for video {video_id}")
             raise RuntimeError(f"Could not get metadata for video {video_id}")
         
-        # Populate quality variants
-        quality_variants = {}
-        for quality, gcs_path in quality_paths.items():
-            quality_variants[quality] = {
-                'path': gcs_path,
-                'resolution': QUALITY_PRESETS[quality]['resolution'],
-                'bitrate': QUALITY_PRESETS[quality]['bitrate']
-            }
-        
         # Update metadata
         metadata['quality_variants'] = quality_variants
         metadata['available_qualities'] = list(quality_variants.keys())
-        metadata['highest_quality'] = max(quality_variants.keys(), key=lambda q: int(q.rstrip('p')))
+        if quality_variants:
+            metadata['highest_quality'] = max(quality_variants.keys(), key=lambda q: int(q.rstrip('p')))
         
         # Upload updated metadata
         metadata_path = f"{user_id}/metadata/{video_id}.json"
@@ -178,4 +316,4 @@ def create_quality_variants(video_file_path, user_id, video_id):
     
     except Exception as e:
         logger.error(f"Error creating quality variants for video {video_id}: {str(e)}")
-        raise
+        return {}

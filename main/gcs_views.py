@@ -60,13 +60,13 @@ def upload_video_to_gcs(request):
             for chunk in video_file.chunks():
                 destination.write(chunk)
         
-        # Upload video to GCS
+        # Upload video to GCS with quality processing directly
         video_id = upload_video_with_quality_processing(
             user_id=user_id,
             video_file_path=temp_video_path,
             title=title,
             description=description,
-            process_qualities=False  # We'll handle quality processing separately
+            process_qualities=process_qualities  # This will handle quality processing synchronously
         )
         
         # If video upload failed
@@ -81,8 +81,6 @@ def upload_video_to_gcs(request):
             if os.path.exists(temp_video_path):
                 os.remove(temp_video_path)
             return JsonResponse({'error': 'Failed to retrieve video metadata'}, status=500)
-        
-        gcs_video_path = f"gs://{BUCKET_NAME}/{metadata['file_path']}"
         
         # Handle thumbnail if present
         thumbnail_url = None
@@ -111,7 +109,7 @@ def upload_video_to_gcs(request):
         if os.path.exists(temp_video_path):
             os.remove(temp_video_path)
         
-        # Get metadata for uploaded video
+        # Get updated metadata for uploaded video
         video_metadata = get_video_metadata(user_id, video_id)
         
         # Generate temporary URL for video access
@@ -150,15 +148,6 @@ def upload_video_to_gcs(request):
                 video_metadata['video_db_id'] = video_obj.id
             except Exception as db_err:
                 logger.error(f"Error creating database record: {db_err}")
-        
-        # Process quality variants if requested
-        if process_qualities and video_id:
-            try:
-                logger.info(f"Starting quality processing for video {video_id} with process_qualities={process_qualities}")
-                process_video_quality_async(gcs_video_path, user_id, video_id)
-                logger.info(f"Quality processing started for video {video_id}")
-            except Exception as quality_err:
-                logger.error(f"Failed to start quality processing: {quality_err}")
         
         return JsonResponse({
             'success': True,

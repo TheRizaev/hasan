@@ -860,35 +860,85 @@
     }
     
     // Function to initialize quality options
-    async function initializeQualityOptions() {
-        const videoInfo = await fetchVideoUrl();
-        if (!videoInfo) {
-            console.error('Failed to initialize video');
-            return;
+    async function initializeQualityOptions(availableQualities) {
+        const qualityOptions = document.getElementById('quality-options');
+        const currentQualityDisplay = document.getElementById('current-quality');
+        
+        if (!qualityOptions || !availableQualities) return;
+        
+        // Сохраняем опцию auto
+        const autoQualityOption = qualityOptions.querySelector('.auto-quality');
+        
+        // Очищаем все существующие опции кроме auto
+        while (qualityOptions.firstChild) {
+            qualityOptions.removeChild(qualityOptions.firstChild);
         }
         
-        const qualityMenu = document.getElementById('quality-menu');
-        qualityMenu.innerHTML = '<div class="quality-option" data-quality="auto">Auto</div>';
+        // Добавляем опцию auto обратно
+        qualityOptions.appendChild(autoQualityOption);
         
-        if (videoInfo.availableQualities && videoInfo.availableQualities.length > 0) {
-            videoInfo.availableQualities.forEach(quality => {
-                const option = document.createElement('div');
-                option.className = 'quality-option';
-                option.dataset.quality = quality;
-                option.textContent = quality;
-                qualityMenu.appendChild(option);
+        // Сортируем качества в порядке уменьшения (вначале самое высокое качество)
+        const sortedQualities = [...availableQualities].sort((a, b) => {
+            const numA = parseInt(a.replace('p', ''));
+            const numB = parseInt(b.replace('p', ''));
+            return numB - numA;
+        });
+        
+        // Добавляем каждое доступное качество
+        sortedQualities.forEach(quality => {
+            const option = document.createElement('div');
+            option.className = 'quality-option';
+            option.setAttribute('data-quality', quality);
+            
+            // Определяем метку для качества
+            let qualityLabel = quality;
+            let extraInfo = '';
+            
+            // Добавляем дополнительную информацию для разных качеств
+            if (quality === '360p') {
+                extraInfo = 'Мобильное';
+            } else if (quality === '720p') {
+                extraInfo = 'HD';
+            } else if (quality === '1080p') {
+                extraInfo = 'Full HD';
+            } else if (quality === '2160p') {
+                extraInfo = '4K';
+            }
+            
+            option.innerHTML = `
+                <span class="quality-label">${qualityLabel}</span>
+                ${extraInfo ? `<span class="quality-info">${extraInfo}</span>` : ''}
+            `;
+            
+            // Добавляем обработчик события для смены качества
+            option.addEventListener('click', function() {
+                const quality = this.getAttribute('data-quality');
+                changeVideoQuality(quality);
+                
+                // Обновляем активное состояние
+                document.querySelectorAll('.quality-option').forEach(opt => {
+                    opt.classList.remove('active');
+                });
+                this.classList.add('active');
+                
+                // Закрываем меню настроек
+                document.getElementById('settings-menu').classList.remove('active');
+                document.getElementById('quality-options').classList.remove('active');
             });
-        } else {
-            const loadingOption = document.createElement('div');
-            loadingOption.className = 'quality-option disabled';
-            loadingOption.textContent = 'Qualities processing...';
-            qualityMenu.appendChild(loadingOption);
+            
+            qualityOptions.appendChild(option);
+        });
+        
+        // Устанавливаем текущее качество как "авто" по умолчанию
+        if (currentQualityDisplay) {
+            currentQualityDisplay.textContent = 'авто';
         }
         
-        document.getElementById('current-quality').textContent = videoInfo.quality || 'Auto';
-        currentQuality = videoInfo.quality || 'auto';
-        videoPlayer.src = videoInfo.url;
-        videoPlayer.load();
+        // Добавляем событие на клик для переключения качества
+        qualityItem.addEventListener('click', function() {
+            qualityOptions.classList.toggle('active');
+            playbackSpeedOptions.classList.remove('active');
+        });
     }
 </script>
 {% endblock %}
