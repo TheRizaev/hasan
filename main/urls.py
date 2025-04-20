@@ -30,6 +30,7 @@ urlpatterns = [
     path('api/get-thumbnail-url/<str:video_id>/', gcs_views.get_thumbnail_url, name='get_thumbnail_url'),
     # Маршрут для обновления кэша метаданных
     path('api/refresh-metadata-cache/', gcs_views.refresh_metadata_cache, name='refresh_metadata_cache'),
+    # Маршрут для получения комментарий видео
     path('api/add-comment/', gcs_views.add_comment, name='add_comment'),
     path('api/add-reply/', gcs_views.add_reply, name='add_reply'),
 ]

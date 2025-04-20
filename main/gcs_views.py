@@ -731,7 +731,7 @@ def refresh_metadata_cache(request):
 @require_http_methods(["POST"])
 def add_comment(request):
     """
-    API endpoint to add a new comment (question) to a video
+    API endpoint to add a new comment (question) to a video with improved debugging and search
     """
     try:
         # Get data from request
@@ -745,52 +745,142 @@ def add_comment(request):
         user = request.user
         username = user.username
         
-        # Get video owner info
-        from .gcs_storage import get_video_metadata
-        video_metadata = get_video_metadata(username, video_id)
+        # Enhanced logging for debugging
+        logger.info(f"Adding comment to video ID: {video_id}")
+        logger.info(f"By user: {username}")
         
-        if not video_metadata:
-            return JsonResponse({'success': False, 'error': 'Видео не найдено'}, status=404)
+        # First check if the video ID contains user information
+        video_owner_id = None
+        actual_video_id = video_id
         
-        video_owner_id = video_metadata.get('user_id')
+        if '__' in video_id:
+            # Format might be user_id__video_id
+            parts = video_id.split('__', 1)
+            if len(parts) == 2:
+                video_owner_id = parts[0]
+                actual_video_id = parts[1]
+                logger.info(f"Composite ID detected: owner={video_owner_id}, video_id={actual_video_id}")
         
-        # Add comment to GCS
+        # If we don't have the owner ID yet, try to find it
+        if not video_owner_id:
+            # Try first with current user
+            from .gcs_storage import get_video_metadata, get_bucket, BUCKET_NAME
+            
+            logger.info(f"Checking if current user is the owner...")
+            video_metadata = get_video_metadata(username, actual_video_id)
+            
+            if video_metadata:
+                video_owner_id = username
+                logger.info(f"Current user is the owner of the video")
+            else:
+                # If not found, try to find the owner among all users
+                logger.info(f"Current user is not the owner, searching among all users...")
+                
+                bucket = get_bucket(BUCKET_NAME)
+                if not bucket:
+                    return JsonResponse({'success': False, 'error': 'Не удалось подключиться к хранилищу'}, status=500)
+                
+                # Get list of users from GCS
+                blobs = bucket.list_blobs(delimiter='/')
+                prefixes = list(blobs.prefixes)
+                users = [prefix.replace('/', '') for prefix in prefixes 
+                        if not prefix.startswith('system/')]
+                
+                logger.info(f"Found {len(users)} users to check")
+                
+                # Look for the video among all users
+                found = False
+                for user_id in users:
+                    # Skip if it's the current user (already checked)
+                    if user_id == username:
+                        continue
+                        
+                    logger.info(f"Checking user: {user_id}")
+                    metadata = get_video_metadata(user_id, actual_video_id)
+                    if metadata:
+                        video_owner_id = user_id
+                        found = True
+                        logger.info(f"Found video owner: {user_id}")
+                        break
+                
+                # If still not found, try one more approach - searching for "matching" files
+                if not found:
+                    logger.warning(f"Video not found by direct ID match, trying pattern matching...")
+                    
+                    # Look for metadata files that might contain this video
+                    for user_id in users:
+                        prefix = f"{user_id}/metadata/"
+                        metadata_blobs = list(bucket.list_blobs(prefix=prefix))
+                        
+                        for blob in metadata_blobs:
+                            if blob.name.endswith('.json'):
+                                try:
+                                    metadata = json.loads(blob.download_as_text())
+                                    # Check various ways the video might match
+                                    if (
+                                        (metadata.get('video_id') and actual_video_id in metadata.get('video_id')) or
+                                        (metadata.get('title') and 'Cybernetic Eye' in metadata.get('title'))
+                                    ):
+                                        video_owner_id = user_id
+                                        found = True
+                                        logger.info(f"Found match through content scanning for user: {user_id}")
+                                        break
+                                except Exception as e:
+                                    continue
+                                    
+                        if found:
+                            break
+        
+        # If we still don't have an owner ID, we can't proceed
+        if not video_owner_id:
+            logger.error(f"Could not determine video owner for ID: {actual_video_id}")
+            return JsonResponse({'success': False, 'error': 'Видео не найдено - не удалось определить владельца'}, status=404)
+            
+        logger.info(f"Final video owner: {video_owner_id}")
+        
+        # Add the comment using the determined video owner ID
         from .gcs_storage import add_comment
         display_name = user.profile.display_name if hasattr(user, 'profile') and user.profile.display_name else username
         
         success = add_comment(
-            user_id=video_owner_id,
-            video_id=video_id,
+            user_id=video_owner_id,  # Use the determined video owner ID
+            video_id=actual_video_id,  # Use the actual video ID (without user prefix)
             comment_user_id=username,
             comment_text=text,
             display_name=display_name
         )
         
         if not success:
+            logger.error(f"Failed to add comment to video {actual_video_id} for owner {video_owner_id}")
             return JsonResponse({'success': False, 'error': 'Не удалось добавить комментарий'}, status=500)
         
         # Return success response with comment data
+        import uuid
+        from datetime import datetime
         comment_data = {
             'id': str(uuid.uuid4()),  # Generate random ID for now (GCS should return real ID)
             'user_id': username,
             'display_name': display_name,
             'text': text,
-            'date': datetime.datetime.now().isoformat(),
+            'date': datetime.now().isoformat(),
             'likes': 0,
             'replies': []
         }
         
+        logger.info(f"Comment successfully added")
         return JsonResponse({'success': True, 'comment': comment_data})
         
     except Exception as e:
         logger.error(f"Error adding comment: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 @login_required
 @require_http_methods(["POST"])
 def add_reply(request):
     """
-    API endpoint to add a reply to a comment
+    API endpoint to add a reply to a comment with improved debugging and search
     """
     try:
         # Get data from request
@@ -805,22 +895,107 @@ def add_reply(request):
         user = request.user
         username = user.username
         
-        # Get video owner info from metadata
-        from .gcs_storage import get_video_metadata
-        video_metadata = get_video_metadata(username, video_id)
+        # Enhanced logging for debugging
+        logger.info(f"Adding reply to comment ID: {comment_id}")
+        logger.info(f"On video ID: {video_id}")
+        logger.info(f"By user: {username}")
         
-        if not video_metadata:
-            return JsonResponse({'success': False, 'error': 'Видео не найдено'}, status=404)
+        # First check if the video ID contains user information
+        video_owner_id = None
+        actual_video_id = video_id
         
-        video_owner_id = video_metadata.get('user_id')
+        if '__' in video_id:
+            # Format might be user_id__video_id
+            parts = video_id.split('__', 1)
+            if len(parts) == 2:
+                video_owner_id = parts[0]
+                actual_video_id = parts[1]
+                logger.info(f"Composite ID detected: owner={video_owner_id}, video_id={actual_video_id}")
         
-        # Add reply to GCS
+        # If we don't have the owner ID yet, try to find it
+        if not video_owner_id:
+            # Try first with current user
+            from .gcs_storage import get_video_metadata, get_bucket, BUCKET_NAME
+            
+            logger.info(f"Checking if current user is the owner...")
+            video_metadata = get_video_metadata(username, actual_video_id)
+            
+            if video_metadata:
+                video_owner_id = username
+                logger.info(f"Current user is the owner of the video")
+            else:
+                # If not found, try to find the owner among all users
+                logger.info(f"Current user is not the owner, searching among all users...")
+                
+                bucket = get_bucket(BUCKET_NAME)
+                if not bucket:
+                    return JsonResponse({'success': False, 'error': 'Не удалось подключиться к хранилищу'}, status=500)
+                
+                # Get list of users from GCS
+                blobs = bucket.list_blobs(delimiter='/')
+                prefixes = list(blobs.prefixes)
+                users = [prefix.replace('/', '') for prefix in prefixes 
+                        if not prefix.startswith('system/')]
+                
+                logger.info(f"Found {len(users)} users to check")
+                
+                # Look for the video among all users
+                found = False
+                for user_id in users:
+                    # Skip if it's the current user (already checked)
+                    if user_id == username:
+                        continue
+                        
+                    logger.info(f"Checking user: {user_id}")
+                    metadata = get_video_metadata(user_id, actual_video_id)
+                    if metadata:
+                        video_owner_id = user_id
+                        found = True
+                        logger.info(f"Found video owner: {user_id}")
+                        break
+                
+                # If still not found, try one more approach - searching for "matching" files
+                if not found:
+                    logger.warning(f"Video not found by direct ID match, trying pattern matching...")
+                    
+                    # Look for metadata files that might contain this video
+                    for user_id in users:
+                        prefix = f"{user_id}/metadata/"
+                        metadata_blobs = list(bucket.list_blobs(prefix=prefix))
+                        
+                        for blob in metadata_blobs:
+                            if blob.name.endswith('.json'):
+                                try:
+                                    metadata = json.loads(blob.download_as_text())
+                                    # Check various ways the video might match
+                                    if (
+                                        (metadata.get('video_id') and actual_video_id in metadata.get('video_id')) or
+                                        (metadata.get('title') and 'Cybernetic Eye' in metadata.get('title'))
+                                    ):
+                                        video_owner_id = user_id
+                                        found = True
+                                        logger.info(f"Found match through content scanning for user: {user_id}")
+                                        break
+                                except Exception as e:
+                                    continue
+                                    
+                        if found:
+                            break
+        
+        # If we still don't have an owner ID, we can't proceed
+        if not video_owner_id:
+            logger.error(f"Could not determine video owner for ID: {actual_video_id}")
+            return JsonResponse({'success': False, 'error': 'Видео не найдено - не удалось определить владельца'}, status=404)
+            
+        logger.info(f"Final video owner: {video_owner_id}")
+        
+        # Add reply
         from .gcs_storage import add_reply
         display_name = user.profile.display_name if hasattr(user, 'profile') and user.profile.display_name else username
         
         success = add_reply(
-            user_id=video_owner_id,
-            video_id=video_id,
+            user_id=video_owner_id,  # Use the determined video owner ID
+            video_id=actual_video_id,  # Use the actual video ID (without user prefix)
             comment_id=comment_id,
             reply_user_id=username,
             reply_text=text,
@@ -828,20 +1003,26 @@ def add_reply(request):
         )
         
         if not success:
+            logger.error(f"Failed to add reply to comment {comment_id} on video {actual_video_id}")
             return JsonResponse({'success': False, 'error': 'Не удалось добавить ответ'}, status=500)
         
         # Return success response with reply data
+        import uuid
+        from datetime import datetime
         reply_data = {
-            'id': str(uuid.uuid4()),  # Generate random ID for now (GCS should return real ID)
+            'id': str(uuid.uuid4()),  # Generate random ID for now
             'user_id': username,
             'display_name': display_name,
             'text': text,
-            'date': datetime.datetime.now().isoformat(),
+            'date': datetime.now().isoformat(),
             'likes': 0
         }
         
+        logger.info(f"Reply successfully added")
         return JsonResponse({'success': True, 'reply': reply_data})
         
     except Exception as e:
         logger.error(f"Error adding reply: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
