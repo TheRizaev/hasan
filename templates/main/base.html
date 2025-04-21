@@ -38,6 +38,35 @@
             </div>
         </div>
         <div class="actions">
+            <div class="notification-button">
+                <button class="notification-icon">
+                    <img src="/static/icons/notification.svg" alt="Уведомления" width="24" height="24">
+                    <span class="notification-badge">0</span>
+                </button>
+                <div class="notification-dropdown">
+                    <div class="notification-header">
+                        <h3>Уведомления</h3>
+                    </div>
+                    <div class="notification-content">
+                        {% if user.is_authenticated %}
+                            <div class="empty-notifications">
+                                <div class="empty-icon"><img src="/static/icons/notification.svg" alt="Уведомления" width="80" height="80"></div>
+                                <p>У вас пока нет уведомлений</p>
+                            </div>
+                        {% else %}
+                            <div class="notification-login-required">
+                                <div class="login-icon"><img src="/static/icons/lock.svg" alt="Уведомления" width="80" height="80"></div>
+                                <p>Авторизуйтесь, чтобы видеть уведомления</p>
+                                <div class="notification-login-buttons">
+                                    <a href="{% url 'login' %}" class="notification-login-btn">Войти</a>
+                                    <a href="{% url 'register' %}" class="notification-register-btn">Регистрация</a>
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
             <button class="theme-toggle">
                 <span class="theme-icon sun"><img src="/static/icons/moon.svg" alt="Light mode" width="24" height="24"></span>
                 <span class="theme-icon moon"><img src="/static/icons/sun.svg" alt="Dark mode" width="24" height="24"></span>
@@ -182,3 +211,26 @@
     {% block scripts %}{% endblock %}
 </body>
 </html>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const notificationButton = document.querySelector('.notification-icon');
+        const notificationDropdown = document.querySelector('.notification-dropdown');
+        
+        if (notificationButton && notificationDropdown) {
+            notificationButton.addEventListener('click', function(e) {
+                e.stopPropagation();
+                notificationDropdown.classList.toggle('show');
+            });
+            
+            // Close when clicking outside
+            document.addEventListener('click', function(e) {
+                if (notificationButton && notificationDropdown && 
+                    !notificationButton.contains(e.target) && 
+                    !notificationDropdown.contains(e.target)) {
+                    notificationDropdown.classList.remove('show');
+                }
+            });
+        }
+    });
+</script>

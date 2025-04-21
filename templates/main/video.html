@@ -200,7 +200,7 @@
                             <div class="qa-text">{{ comment.text }}</div>
                             <div class="qa-meta">{{ comment.date|date:"d.m.Y" }}</div>
                             <div class="qa-actions">
-                                <button class="qa-like" data-liked="false">👍 <span>{{ comment.likes|default:"0" }}</span></button>
+                                <button class="qa-like" data-liked="false"><img src="/static/icons/like.svg" alt="Студия" width="20" height="20"> <span>{{ comment.likes|default:"0" }}</span></button>
                                 <button class="qa-reply-btn" data-comment-id="{{ comment.id }}">Ответить</button>
                             </div>
                             
@@ -223,30 +223,34 @@
                             </div>
                             
                             {% if comment.replies %}
-                            <div class="qa-replies">
-                                {% for reply in comment.replies %}
-                                <div class="qa-reply">
-                                    <div class="user-avatar {% if reply.user_id == video.user_id %}author-avatar{% endif %}">
-                                        {% if reply.avatar_url %}
-                                            <img src="{{ reply.avatar_url }}" alt="{{ reply.display_name }}">
-                                        {% else %}
-                                            {{ reply.display_name|first }}
-                                        {% endif %}
-                                    </div>
-                                    <div class="qa-content">
-                                        <div class="qa-author {% if reply.user_id == video.user_id %}is-author{% endif %}">
-                                            {{ reply.display_name }}
-                                            {% if reply.user_id == video.user_id %}<span class="author-badge">Автор</span>{% endif %}
+                                <button class="show-replies-btn" data-shown="false">Показать ответы ({{ comment.replies|length }})</button>
+                                <div class="qa-replies" style="display: none;">
+                                    {% for reply in comment.replies %}
+                                    <div class="qa-reply" data-user-id="{{ reply.user_id }}">
+                                        <div class="user-avatar {% if reply.user_id == video.user_id %}author-avatar{% endif %}">
+                                            {% if reply.avatar_url %}
+                                                <img src="{{ reply.avatar_url }}" alt="{{ reply.display_name }}">
+                                            {% else %}
+                                                {{ reply.display_name|first }}
+                                            {% endif %}
                                         </div>
-                                        <div class="qa-text">{{ reply.text }}</div>
-                                        <div class="qa-meta">{{ reply.date|date:"d.m.Y" }}</div>
-                                        <div class="qa-actions">
-                                            <button class="qa-like">👍 <span>{{ reply.likes|default:"0" }}</span></button>
+                                        <div class="qa-content">
+                                            <div class="qa-author {% if reply.user_id == video.user_id %}is-author{% endif %}" data-username="{{ reply.user_id }}">
+                                                {{ reply.display_name }}
+                                                {% if reply.user_id == video.user_id %}<span class="author-badge">Автор</span>{% endif %}
+                                            </div>
+                                            <div class="qa-text">{{ reply.text }}</div>
+                                            <div class="qa-meta">{{ reply.date|date:"d.m.Y" }}</div>
+                                            <div class="qa-actions">
+                                                <button class="qa-like"><img src="/static/icons/like.svg" alt="Студия" width="20" height="20"> <span>{{ reply.likes|default:"0" }}</span></button>
+                                                <button class="qa-reply-to-reply-btn" data-comment-id="{{ comment.id }}" data-username="{{ reply.user_id }}">Ответить</button>
+                                            </div>
                                         </div>
                                     </div>
+                                    {% endfor %}
                                 </div>
-                                {% endfor %}
-                            </div>
+                            {% else %}
+                                <div class="qa-replies"></div>
                             {% endif %}
                         </div>
                     </div>

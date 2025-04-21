@@ -577,7 +577,6 @@ def delete_video_from_gcs(request, video_id):
         logger.error(f"Error deleting video: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
 
-@login_required
 @require_http_methods(["GET"])
 def get_video_url(request, video_id):
     """

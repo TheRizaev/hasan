@@ -64,22 +64,17 @@
                 {% if gcs_profile.stats %}
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-icon">📹</div>
+                        <div class="stat-icon"><img src="/static/icons/views.svg" alt="Студия" width="50" height="50"></div>
                         <div class="stat-value">{{ gcs_profile.stats.videos_count|default:"0" }}</div>
                         <div class="stat-label">Videos</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-icon">👁️</div>
+                        <div class="stat-icon"><img src="/static/icons/eye.svg" alt="Студия" width="50" height="50"></div>
                         <div class="stat-value">{{ gcs_profile.stats.total_views|default:"0" }}</div>
                         <div class="stat-label">Total Views</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-icon">💾</div>
-                        <div class="stat-value">{{ gcs_profile.total_size_mb|default:"0" }} MB</div>
-                        <div class="stat-label">Storage Used</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon">📅</div>
+                        <div class="stat-icon"><img src="/static/icons/timedelta.svg" alt="Студия" width="50" height="50"></div>
                         <div class="stat-value">{{ user.profile.date_joined|timesince }}</div>
                         <div class="stat-label">Member For</div>
                     </div>
