@@ -289,13 +289,46 @@ function searchVideos(query) {
     if (!query.trim() || !videoData || !videoData.length) return [];
     
     query = query.toLowerCase();
-    return videoData.filter(video => 
+    let results = videoData.filter(video => 
         (video.title && video.title.toLowerCase().includes(query)) || 
         (video.display_name && video.display_name.toLowerCase().includes(query)) ||
         (video.channel && video.channel.toLowerCase().includes(query)) ||
         (video.description && video.description.toLowerCase().includes(query)) ||
         (video.user_id && video.user_id.toLowerCase().includes(query))
     );
+    
+    // Сортируем результаты по релевантности
+    results.sort((a, b) => {
+        const titleA = (a.title || '').toLowerCase();
+        const titleB = (b.title || '').toLowerCase();
+        
+        // Точное совпадение с заголовком
+        if (titleA === query && titleB !== query) return -1;
+        if (titleB === query && titleA !== query) return 1;
+        
+        // Заголовок начинается с запроса
+        if (titleA.startsWith(query) && !titleB.startsWith(query)) return -1;
+        if (titleB.startsWith(query) && !titleA.startsWith(query)) return 1;
+        
+        // Заголовок содержит запрос
+        const aContains = titleA.includes(query);
+        const bContains = titleB.includes(query);
+        if (aContains && !bContains) return -1;
+        if (bContains && !aContains) return 1;
+        
+        // Сортировка по просмотрам (если все остальное равно)
+        const viewsA = parseInt(a.views || 0);
+        const viewsB = parseInt(b.views || 0);
+        return viewsB - viewsA;
+    });
+    
+    // Логируем, чтобы при отладке видеть, что нашлось
+    console.log(`Поиск по "${query}" нашел ${results.length} результатов`);
+    if (results.length > 0) {
+        console.log("Первые 3 результата:", results.slice(0, 3).map(v => v.title));
+    }
+    
+    return results;
 }
 
 // Функция для настройки поиска
@@ -306,7 +339,7 @@ function setupSearch() {
     
     if (!searchInput || !searchDropdown) return;
     
-    // Popular search terms (these could come from the backend in a real implementation)
+    // Popular search terms
     const popularSearchTerms = [
         "Программирование Python",
         "Математический анализ",
@@ -328,14 +361,34 @@ function setupSearch() {
             return;
         }
         
-        // Add delay before search to not overload the system
+        // Add delay before search
         searchTimeout = setTimeout(() => {
-            // First show local results (from cached videos)
-            const results = searchVideos(query);
-            showSearchResults(results, searchDropdown, query);
-            
-            // Then fetch additional results from server if needed
-            // In a real implementation, you could do a server-side search here
+            // Make an API request to search
+            fetch(`/api/list-all-videos/?offset=0&limit=10`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.videos) {
+                        // Filter videos by query
+                        const filteredVideos = data.videos.filter(video => {
+                            const title = video.title && video.title.toLowerCase();
+                            const description = video.description && video.description.toLowerCase();
+                            const channel = (video.channel || video.display_name || video.user_id || "").toLowerCase();
+                            const queryLower = query.toLowerCase();
+                            
+                            return (title && title.includes(queryLower)) || 
+                                   (description && description.includes(queryLower)) || 
+                                   (channel && channel.includes(queryLower));
+                        });
+                        
+                        showSearchResults(filteredVideos, searchDropdown, query);
+                    } else {
+                        showSearchResults([], searchDropdown, query);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching search results:', error);
+                    showSearchResults([], searchDropdown, query);
+                });
         }, 300);
     });
     
@@ -344,8 +397,31 @@ function setupSearch() {
         if (!query) {
             showPopularSearchTerms(popularSearchTerms, searchDropdown);
         } else {
-            const results = searchVideos(query);
-            showSearchResults(results, searchDropdown, query);
+            fetch(`/api/list-all-videos/?offset=0&limit=10`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.videos) {
+                        // Filter videos by query
+                        const queryLower = query.toLowerCase();
+                        const filteredVideos = data.videos.filter(video => {
+                            const title = video.title && video.title.toLowerCase();
+                            const description = video.description && video.description.toLowerCase();
+                            const channel = (video.channel || video.display_name || video.user_id || "").toLowerCase();
+                            
+                            return (title && title.includes(queryLower)) || 
+                                   (description && description.includes(queryLower)) || 
+                                   (channel && channel.includes(queryLower));
+                        });
+                        
+                        showSearchResults(filteredVideos, searchDropdown, query);
+                    } else {
+                        showSearchResults([], searchDropdown, query);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching search results:', error);
+                    showSearchResults([], searchDropdown, query);
+                });
         }
     });
     
