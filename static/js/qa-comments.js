@@ -27,42 +27,55 @@ document.addEventListener('DOMContentLoaded', function() {
      * Main initialization function
      */
     function initQASystem() {
+        console.log("Initializing QA system...");
+        console.log("isAuthenticated:", isAuthenticated);
+        
         // Register event listeners for non-authenticated users
         if (!isAuthenticated) {
             setupNonAuthenticatedHandlers();
         } else {
-            // Set up comment submission and other interactions
+            // Set up comment submission
             setupCommentSubmission();
-            setupReplyButtons();
+            // Set up like buttons
             setupLikeButtons();
         }
         
-        // Apply event handlers to any existing comments
+        // Set up event delegation for reply buttons
+        setupReplyButtonDelegation();
+        // Apply event handlers to existing comments
         setupExistingComments();
+    }
+
+    function setupReplyButtonDelegation() {
+        console.log("Setting up reply button delegation...");
+        qaList.addEventListener('click', function(e) {
+            const replyBtn = e.target.closest('.qa-reply-btn');
+            if (replyBtn && isAuthenticated) {
+                e.preventDefault();
+                const commentId = replyBtn.getAttribute('data-comment-id');
+                console.log(`Reply button clicked for comment ${commentId}`);
+                toggleReplyForm(commentId);
+            }
+        });
     }
     
     /**
      * Setup event handlers for existing comments
      */
     function setupExistingComments() {
-        // Get all existing comments/questions
+        console.log("Setting up existing comments...");
         const existingComments = document.querySelectorAll('.qa-item');
+        console.log(`Found ${existingComments.length} existing comments`);
         
         existingComments.forEach(comment => {
             const commentId = comment.getAttribute('data-comment-id');
-            
-            // Set up reply buttons
-            const replyBtn = comment.querySelector('.qa-reply-btn');
-            if (replyBtn && isAuthenticated) {
-                replyBtn.addEventListener('click', function() {
-                    toggleReplyForm(commentId);
-                });
-            }
+            console.log(`Setting up comment ID: ${commentId}`);
             
             // Set up cancel buttons
             const cancelBtn = comment.querySelector('.cancel-reply');
             if (cancelBtn) {
-                cancelBtn.addEventListener('click', function() {
+                cancelBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
                     hideReplyForm(commentId);
                 });
             }
@@ -70,7 +83,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // Set up reply submission
             const replySubmitBtn = comment.querySelector('.reply-submit');
             if (replySubmitBtn && isAuthenticated) {
-                replySubmitBtn.addEventListener('click', function() {
+                replySubmitBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
                     submitReply(commentId);
                 });
                 
@@ -155,10 +169,17 @@ document.addEventListener('DOMContentLoaded', function() {
         // Get CSRF token for Django
         const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
         
+        // Create a proper video ID for API
+        let apiVideoId = videoId;
+        if (videoUserId) {
+            // Make sure we use the composite ID format for the API
+            apiVideoId = `${videoUserId}__${videoId}`;
+        }
+        
         // Prepare data for submission
         const formData = new FormData();
         formData.append('text', commentText);
-        formData.append('video_id', videoId);
+        formData.append('video_id', apiVideoId);
         
         // Using fetch to send the request
         fetch('/api/add-comment/', {
@@ -265,9 +286,22 @@ document.addEventListener('DOMContentLoaded', function() {
         const date = new Date(comment.date);
         const formattedDate = formatDate(date);
         
+        // Determine avatar content - either image or first letter
+        let avatarContent = '';
+        if (comment.avatar_url) {
+            avatarContent = `<img src="${comment.avatar_url}" alt="${displayName}">`;
+        } else {
+            avatarContent = firstLetter;
+        }
+        
+        // Get current user initial for reply form
+        const currentUserInitial = getCurrentUserInitial();
+        // Get current user avatar for reply form
+        const currentUserAvatar = getCurrentUserAvatar();
+        
         div.innerHTML = `
             <div class="user-avatar ${isAuthor ? 'author-avatar' : ''}">
-                ${firstLetter}
+                ${avatarContent}
             </div>
             <div class="qa-content">
                 <div class="qa-author ${isAuthor ? 'is-author' : ''}">
@@ -283,7 +317,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 <!-- Reply form (initially hidden) -->
                 <div class="reply-form" id="reply-form-${comment.id}" style="display: none;">
-                    <div class="user-avatar">${getCurrentUserInitial()}</div>
+                    <div class="user-avatar">${currentUserAvatar}</div>
                     <input type="text" id="reply-input-${comment.id}" placeholder="Ответить на вопрос...">
                     <button class="reply-submit" data-comment-id="${comment.id}">Ответить</button>
                     <button class="cancel-reply" data-comment-id="${comment.id}">Отмена</button>
@@ -303,7 +337,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Set up reply button
         const replyBtn = commentElement.querySelector('.qa-reply-btn');
         if (replyBtn) {
-            replyBtn.addEventListener('click', function() {
+            replyBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                console.log(`Reply button clicked for comment ${commentId}`);
                 toggleReplyForm(commentId);
             });
         }
@@ -311,7 +347,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Set up cancel button
         const cancelBtn = commentElement.querySelector('.cancel-reply');
         if (cancelBtn) {
-            cancelBtn.addEventListener('click', function() {
+            cancelBtn.addEventListener('click', function(e) {
+                e.preventDefault();
                 hideReplyForm(commentId);
             });
         }
@@ -319,7 +356,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Set up reply submission
         const replySubmitBtn = commentElement.querySelector('.reply-submit');
         if (replySubmitBtn) {
-            replySubmitBtn.addEventListener('click', function() {
+            replySubmitBtn.addEventListener('click', function(e) {
+                e.preventDefault();
                 submitReply(commentId);
             });
             
@@ -343,9 +381,12 @@ document.addEventListener('DOMContentLoaded', function() {
      * Set up all reply buttons
      */
     function setupReplyButtons() {
+        console.log("Setting up reply buttons...");
         document.querySelectorAll('.qa-reply-btn').forEach(button => {
-            button.addEventListener('click', function() {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
                 const commentId = this.getAttribute('data-comment-id');
+                console.log(`Reply button clicked for comment ${commentId}`);
                 toggleReplyForm(commentId);
             });
         });
@@ -411,23 +452,34 @@ document.addEventListener('DOMContentLoaded', function() {
      * Toggle visibility of the reply form
      */
     function toggleReplyForm(commentId) {
+        console.log(`Toggling reply form for comment ${commentId}`);
         const replyForm = document.getElementById(`reply-form-${commentId}`);
+        
+        if (!replyForm) {
+            console.error(`Reply form not found for comment ${commentId}`);
+            showStatusMessage('Ошибка: форма ответа не найдена', 'error');
+            return;
+        }
         
         // Hide all other reply forms
         document.querySelectorAll('.reply-form').forEach(form => {
-            if (form.id !== `reply-form-${commentId}`) {
+            if (form.id !== `reply-form-${commentId}` && form.style.display !== 'none') {
                 form.style.display = 'none';
+                const input = form.querySelector('input');
+                if (input) input.value = '';
             }
         });
         
         // Toggle this form
-        if (replyForm) {
-            replyForm.style.display = replyForm.style.display === 'none' ? 'flex' : 'none';
-            
-            // Focus the input field if showing
-            if (replyForm.style.display === 'flex') {
-                const input = replyForm.querySelector('input');
-                if (input) input.focus();
+        const isHidden = replyForm.style.display === 'none' || replyForm.style.display === '';
+        replyForm.style.display = isHidden ? 'flex' : 'none';
+        console.log(`New reply form display: ${replyForm.style.display}`);
+        
+        // Focus the input field if showing
+        if (isHidden) {
+            const input = replyForm.querySelector('input');
+            if (input) {
+                input.focus();
             }
         }
     }
@@ -439,8 +491,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const replyForm = document.getElementById(`reply-form-${commentId}`);
         if (replyForm) {
             replyForm.style.display = 'none';
-            
-            // Clear the input
             const input = replyForm.querySelector('input');
             if (input) input.value = '';
         }
@@ -464,11 +514,18 @@ document.addEventListener('DOMContentLoaded', function() {
         // Get CSRF token for Django
         const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
         
+        // Create a proper video ID for API
+        let apiVideoId = videoId;
+        if (videoUserId) {
+            // Make sure we use the composite ID format for the API
+            apiVideoId = `${videoUserId}__${videoId}`;
+        }
+        
         // Prepare data for submission
         const formData = new FormData();
         formData.append('text', replyText);
         formData.append('comment_id', commentId);
-        formData.append('video_id', videoId);
+        formData.append('video_id', apiVideoId);
         
         // Send request to the server
         fetch('/api/add-reply/', {
@@ -590,9 +647,17 @@ document.addEventListener('DOMContentLoaded', function() {
         const date = new Date(reply.date);
         const formattedDate = formatDate(date);
         
+        // Determine avatar content - either image or first letter
+        let avatarContent = '';
+        if (reply.avatar_url) {
+            avatarContent = `<img src="${reply.avatar_url}" alt="${displayName}">`;
+        } else {
+            avatarContent = firstLetter;
+        }
+        
         div.innerHTML = `
             <div class="user-avatar ${isAuthor ? 'author-avatar' : ''}">
-                ${firstLetter}
+                ${avatarContent}
             </div>
             <div class="qa-content">
                 <div class="qa-author ${isAuthor ? 'is-author' : ''}">
@@ -867,6 +932,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     /**
+     * Get the current user's avatar (HTML content)
+     */
+    function getCurrentUserAvatar() {
+        // Try to get avatar from the comment form
+        const userAvatar = document.querySelector('.comment-form .user-avatar');
+        if (userAvatar) {
+            return userAvatar.innerHTML;
+        }
+        
+        return getCurrentUserInitial();
+    }
+    
+    /**
      * Format a date in a user-friendly way
      */
     function formatDate(date) {
@@ -947,6 +1025,14 @@ document.addEventListener('DOMContentLoaded', function() {
             
             .qa-like.liked span {
                 font-weight: bold;
+            }
+            
+            .reply-form {
+                display: none;
+            }
+            
+            .reply-form.visible {
+                display: flex !important;
             }
         `;
         

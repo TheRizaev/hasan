@@ -466,4 +466,49 @@ document.addEventListener('DOMContentLoaded', function() {
             // In a real app, you would make an AJAX request to track the view
         }
     });
+
+    /**
+     * Функция для отслеживания просмотра видео
+     * Отправляет запрос на сервер для учёта просмотра
+     */
+    function trackVideoView(videoId, userId) {
+        console.log('Tracking view for video:', videoId, 'owner:', userId);
+        
+        // Создаем форму для отправки данных
+        const formData = new FormData();
+        formData.append('video_id', videoId);
+        if (userId) {
+            formData.append('user_id', userId);
+        }
+        
+        // Получаем CSRF-токен для защиты от CSRF-атак
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+        
+        // Отправляем запрос на сервер
+        fetch('/api/track-view/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('View tracked successfully, new count:', data.views);
+                
+                // Обновляем отображение просмотров на странице
+                const viewsInfo = document.querySelector('.views-info');
+                if (viewsInfo) {
+                    viewsInfo.textContent = data.views_formatted + ' • ' + 
+                        viewsInfo.textContent.split('•')[1].trim();
+                }
+            } else {
+                console.log('View not tracked:', data.reason || data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error tracking view:', error);
+        });
+    }
 });

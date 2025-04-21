@@ -955,3 +955,73 @@
         align-self: flex-end;
     }
 }
+
+.user-avatar img, 
+.comment-avatar img,
+.qa-item .user-avatar img,
+.qa-reply .user-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+/* Обновляем стили для аватаров в комментариях */
+.qa-item .user-avatar,
+.qa-reply .user-avatar {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    background-color: var(--primary-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    margin-right: 20px;
+    color: white;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden; /* Важно для обрезки изображений */
+}
+
+/* Обновляем стиль для формы комментария */
+.comment-form {
+    display: flex;
+    align-items: center;
+    margin-bottom: 30px;
+    gap: 15px;
+}
+
+.comment-form .user-avatar {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    background-color: var(--accent-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: white;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Обновляем стили для формы ответа */
+.reply-form {
+    display: flex;
+    align-items: center;
+    margin: 15px 0;
+    gap: 10px;
+}
+
+.reply-form .user-avatar {
+    width: 35px;
+    height: 35px;
+    min-width: 35px; /* Предотвращаем сжатие */
+}
+
+/* Стили для аватара текущего пользователя в форме */
+#qa-form .user-avatar {
+    overflow: hidden;
+}
