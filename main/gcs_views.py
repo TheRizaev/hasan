@@ -804,10 +804,14 @@ def add_comment(request):
                         break
                 
                 # If still not found, try one more approach - using the exact video ID
-                if not found:
-                    logger.warning(f"Video not found by direct ID match, using provided video ID anyway")
-                    video_owner_id = username
-                    # Это важное исправление: если владелец видео не найден, используем текущего пользователя
+                if not found and video_owner_id is None:  # Only set this if we haven't found a video owner yet
+                    # Try to extract from the URL if possible
+                    if '__' in video_id:
+                        video_owner_id = video_id.split('__', 1)[0]
+                        logger.info(f"Using video owner from URL: {video_owner_id}")
+                    else:
+                        logger.error(f"Could not determine video owner for ID: {actual_video_id}")
+                        return JsonResponse({'success': False, 'error': 'Видео не найдено - не удалось определить владельца'}, status=404)
         
         # Если мы все еще не имеем owner ID после всех попыток, возвращаем ошибку
         if not video_owner_id:
@@ -943,12 +947,13 @@ def add_reply(request):
                         break
                 
                 # Если владелец видео всё ещё не найден, используем значение из URL
-                if not found and video_owner_id:
+                if not found and '__' in video_id:
+                    video_owner_id = video_id.split('__', 1)[0]
                     logger.warning(f"Video not found by direct ID match, using URL-provided owner ID: {video_owner_id}")
-                # Если в URL не был указан владелец, используем текущего пользователя
+                # Если в URL не был указан владелец и мы не нашли видео, возвращаем ошибку
                 elif not found:
-                    logger.warning(f"Video not found by direct ID match, using current user as owner")
-                    video_owner_id = username
+                    logger.error(f"Could not determine video owner for ID: {actual_video_id}")
+                    return JsonResponse({'success': False, 'error': 'Видео не найдено - не удалось определить владельца'}, status=404)
         
         # If we still don't have an owner ID, we can't proceed
         if not video_owner_id:
