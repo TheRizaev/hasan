@@ -563,9 +563,32 @@ function setupCategories() {
     });
 }
 
+document.querySelectorAll('.show-replies-btn').forEach(button => {
+    button.addEventListener('click', function() {
+        const isShown = this.getAttribute('data-shown') === 'true';
+        const repliesContainer = this.nextElementSibling;
+        
+        if (repliesContainer && repliesContainer.classList.contains('qa-replies')) {
+            const replyCount = repliesContainer.querySelectorAll('.qa-reply').length;
+            
+            if (isShown) {
+                // Hide replies
+                repliesContainer.style.display = 'none';
+                this.textContent = `Показать ответы (${replyCount})`;
+                this.setAttribute('data-shown', 'false');
+            } else {
+                // Show replies
+                repliesContainer.style.display = 'block';
+                this.textContent = 'Скрыть ответы';
+                this.setAttribute('data-shown', 'true');
+            }
+        }
+    });
+});
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
     videosContainer = document.getElementById('videos-container');
+    
     
     if (videosContainer && videosContainer.children.length === 0) {
         console.log('Initial video load');

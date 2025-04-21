@@ -29,15 +29,6 @@
     position: relative;
 }
 
-.related-videos h3::after {
-    content: "🐰";
-    position: absolute;
-    font-size: 1.2rem;
-    right: 0;
-    top: 0;
-    animation: hop 1s infinite;
-}
-
 .related-videos-list {
     display: flex !important;
     flex-direction: column;
@@ -1024,4 +1015,92 @@
 /* Стили для аватара текущего пользователя в форме */
 #qa-form .user-avatar {
     overflow: hidden;
+}
+
+.show-replies-btn {
+    margin: 10px 0;
+    padding: 6px 12px;
+    background-color: transparent;
+    border: 1px solid var(--gray-color);
+    color: var(--gray-color);
+    border-radius: 15px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: block;
+}
+
+.show-replies-btn:hover {
+    background-color: rgba(159, 37, 88, 0.1);
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+}
+
+/* Styles for Mentioned Username */
+.user-mention {
+    font-weight: bold;
+    color: var(--accent-color);
+    text-decoration: none;
+    padding: 2px 4px;
+    border-radius: 4px;
+    background-color: rgba(159, 37, 88, 0.1);
+}
+
+/* Reply to Reply Button */
+.qa-reply-to-reply-btn {
+    background: none;
+    border: none;
+    color: var(--gray-color);
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 4px;
+    transition: all 0.3s;
+    font-size: 0.9rem;
+    margin-left: 10px;
+}
+
+.qa-reply-to-reply-btn:hover {
+    color: var(--accent-color);
+}
+
+.dark-theme .qa-reply-to-reply-btn:hover {
+    background-color: rgba(159, 37, 88, 0.2);
+}
+
+/* Animation for replies container */
+.qa-replies {
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+/* Make reply spacing more compact */
+.qa-reply {
+    margin-bottom: 15px;
+    padding-left: 0;
+}
+
+.qa-reply:last-child {
+    margin-bottom: 5px;
+}
+
+/* Reply separator */
+.qa-reply:not(:last-child) {
+    border-bottom: 1px solid rgba(159, 37, 88, 0.1);
+    padding-bottom: 15px;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .show-replies-btn {
+        width: 100%;
+        text-align: center;
+    }
+    
+    .qa-reply .qa-actions {
+        justify-content: space-between;
+    }
+    
+    .qa-reply-to-reply-btn {
+        margin-left: 0;
+    }
 }

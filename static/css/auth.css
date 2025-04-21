@@ -199,16 +199,6 @@
     overflow: hidden;
 }
 
-.profile-header::before {
-    content: "🐰";
-    position: absolute;
-    right: 20px;
-    top: 20px;
-    font-size: 28px;
-    opacity: 0.3;
-    animation: bounce 2s infinite;
-}
-
 .light-theme .profile-header {
     background-color: rgba(255, 255, 255, 0.7);
     box-shadow: 0 5px 15px rgba(159, 37, 88, 0.1);

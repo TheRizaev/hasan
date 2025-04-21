@@ -44,17 +44,141 @@ document.addEventListener('DOMContentLoaded', function() {
         setupReplyButtonDelegation();
         // Apply event handlers to existing comments
         setupExistingComments();
+        // Set up show/hide replies functionality
+        setupShowHideReplies();
+    }
+
+    /**
+     * Set up show/hide replies functionality
+     */
+    function setupShowHideReplies() {
+        console.log("Setting up show/hide replies functionality");
+        
+        // Find all show replies buttons
+        const showRepliesBtns = document.querySelectorAll('.show-replies-btn');
+        console.log(`Found ${showRepliesBtns.length} show/hide buttons`);
+        
+        // Add click handlers to each button
+        showRepliesBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                // Get the current state
+                const isShown = this.getAttribute('data-shown') === 'true';
+                
+                // Find the related replies container
+                // It's the next element if it has the qa-replies class
+                const repliesContainer = this.nextElementSibling;
+                
+                if (repliesContainer && repliesContainer.classList.contains('qa-replies')) {
+                    const replyCount = repliesContainer.querySelectorAll('.qa-reply').length;
+                    
+                    if (isShown) {
+                        // Hide replies
+                        repliesContainer.style.display = 'none';
+                        this.innerHTML = `Показать ответы (${replyCount})`;
+                        this.setAttribute('data-shown', 'false');
+                    } else {
+                        // Show replies
+                        repliesContainer.style.display = 'block';
+                        this.innerHTML = 'Скрыть ответы';
+                        this.setAttribute('data-shown', 'true');
+                    }
+                } else {
+                    console.error("Could not find replies container after button");
+                }
+            });
+        });
+        
+        // Also set up event delegation for dynamically added buttons
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('.show-replies-btn');
+            if (!btn) return; // Not a show replies button
+            
+            // Prevent handling if the button already has a direct event handler
+            if (btn.getAttribute('data-has-handler') === 'true') return;
+            
+            // Mark this button as handled via delegation
+            btn.setAttribute('data-has-handler', 'true');
+            
+            // Get current state
+            const isShown = btn.getAttribute('data-shown') === 'true';
+            
+            // Find replies container (should be the next element)
+            const repliesContainer = btn.nextElementSibling;
+            
+            if (repliesContainer && repliesContainer.classList.contains('qa-replies')) {
+                const replyCount = repliesContainer.querySelectorAll('.qa-reply').length;
+                
+                if (isShown) {
+                    // Hide replies
+                    repliesContainer.style.display = 'none';
+                    btn.innerHTML = `Показать ответы (${replyCount})`;
+                    btn.setAttribute('data-shown', 'false');
+                } else {
+                    // Show replies
+                    repliesContainer.style.display = 'block';
+                    btn.innerHTML = 'Скрыть ответы';
+                    btn.setAttribute('data-shown', 'true');
+                }
+            }
+        });
     }
 
     function setupReplyButtonDelegation() {
         console.log("Setting up reply button delegation...");
         qaList.addEventListener('click', function(e) {
+            // Handle direct comment reply buttons
             const replyBtn = e.target.closest('.qa-reply-btn');
             if (replyBtn && isAuthenticated) {
                 e.preventDefault();
                 const commentId = replyBtn.getAttribute('data-comment-id');
                 console.log(`Reply button clicked for comment ${commentId}`);
                 toggleReplyForm(commentId);
+                return;
+            }
+            
+            // Handle reply to reply buttons
+            const replyToReplyBtn = e.target.closest('.qa-reply-to-reply-btn');
+            if (replyToReplyBtn && isAuthenticated) {
+                e.preventDefault();
+                const commentId = replyToReplyBtn.getAttribute('data-comment-id');
+                const username = replyToReplyBtn.getAttribute('data-username');
+                
+                console.log(`Reply to reply clicked - comment: ${commentId}, username: ${username}`);
+                
+                // Show the reply form
+                toggleReplyForm(commentId);
+                
+                // Add username to input field
+                const replyInput = document.getElementById(`reply-input-${commentId}`);
+                if (replyInput) {
+                    replyInput.value = `@${username} `;
+                    replyInput.focus();
+                    // Put cursor at the end
+                    replyInput.selectionStart = replyInput.selectionEnd = replyInput.value.length;
+                }
+            }
+            
+            // Handle show/hide replies buttons created dynamically
+            const showRepliesBtn = e.target.closest('.show-replies-btn');
+            if (showRepliesBtn) {
+                const isShown = showRepliesBtn.getAttribute('data-shown') === 'true';
+                const repliesSection = showRepliesBtn.nextElementSibling;
+                
+                if (repliesSection && repliesSection.classList.contains('qa-replies')) {
+                    const replyCount = repliesSection.querySelectorAll('.qa-reply').length;
+                    
+                    if (isShown) {
+                        // Hide replies
+                        repliesSection.style.display = 'none';
+                        showRepliesBtn.innerHTML = `Показать ответы (${replyCount})`;
+                        showRepliesBtn.setAttribute('data-shown', 'false');
+                    } else {
+                        // Show replies
+                        repliesSection.style.display = 'block';
+                        showRepliesBtn.innerHTML = 'Скрыть ответы';
+                        showRepliesBtn.setAttribute('data-shown', 'true');
+                    }
+                }
             }
         });
     }
@@ -102,7 +226,37 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Set up like buttons
             setupCommentLikes(comment);
+            
+            // Set up reply-to-reply buttons for existing replies
+            const replies = comment.querySelectorAll('.qa-reply');
+            replies.forEach(reply => {
+                setupReplyToReplyButtons(reply);
+            });
         });
+    }
+    
+    /**
+     * Set up reply-to-reply buttons for a specific reply
+     */
+    function setupReplyToReplyButtons(replyElement) {
+        // Add reply button only if not already present
+        if (!replyElement.querySelector('.qa-reply-to-reply-btn')) {
+            const actionsDiv = replyElement.querySelector('.qa-actions');
+            if (actionsDiv) {
+                // Use user_id instead of display name for the mention
+                const username = replyElement.querySelector('.qa-author').getAttribute('data-username') || 
+                                replyElement.getAttribute('data-user-id');
+                const commentId = replyElement.closest('.qa-item').getAttribute('data-comment-id');
+                
+                const replyBtn = document.createElement('button');
+                replyBtn.className = 'qa-reply-to-reply-btn';
+                replyBtn.textContent = 'Ответить';
+                replyBtn.setAttribute('data-comment-id', commentId);
+                replyBtn.setAttribute('data-username', username);
+                
+                actionsDiv.appendChild(replyBtn);
+            }
+        }    
     }
     
     /**
@@ -301,6 +455,20 @@ document.addEventListener('DOMContentLoaded', function() {
         
         div.innerHTML = `
             <div class="user-avatar ${isAuthor ? 'author-avatar' : ''}">
+                ${avatarContent}
+            </div>
+            <div class="qa-content">
+                <div class="qa-author ${isAuthor ? 'is-author' : ''}">
+                    ${displayName}
+                    ${isAuthor ? '<span class="author-badge">Автор</span>' : ''}
+                </div>
+                <div class="qa-text">${replyText}</div>
+                <div class="qa-meta">${formattedDate}</div>
+                <div class="qa-actions">
+                    <button class="qa-like" data-liked="false">👍 <span>${reply.likes || 0}</span></button>
+                    <button class="qa-reply-to-reply-btn" data-username="${displayName}">Ответить</button>
+                </div>
+            </div>
                 ${avatarContent}
             </div>
             <div class="qa-content">
@@ -615,10 +783,39 @@ document.addEventListener('DOMContentLoaded', function() {
             commentElement.querySelector('.qa-content').appendChild(repliesContainer);
         }
         
+        // Add parent comment ID to the reply object
+        reply.parentCommentId = commentId;
+        
         // Create the reply element
         const replyElement = createReplyElement(reply);
         
-        // Add it to the container
+        // Check if there's already a "show replies" button
+        let showRepliesBtn = commentElement.querySelector('.show-replies-btn');
+        
+        // If replies were previously hidden, show them now for the new reply
+        if (showRepliesBtn) {
+            // Show replies container
+            repliesContainer.style.display = 'block';
+            
+            // Update button text
+            const replyCount = repliesContainer.querySelectorAll('.qa-reply').length + 1; // +1 for the new reply
+            showRepliesBtn.innerHTML = 'Скрыть ответы';
+            showRepliesBtn.setAttribute('data-shown', 'true');
+        } else if (repliesContainer.querySelectorAll('.qa-reply').length === 0) {
+            // This is the first reply, we'll add a show/hide button after adding the reply
+            showRepliesBtn = document.createElement('button');
+            showRepliesBtn.className = 'show-replies-btn';
+            showRepliesBtn.innerHTML = 'Скрыть ответы';
+            showRepliesBtn.setAttribute('data-shown', 'true');
+            
+            // Insert button before replies container
+            commentElement.querySelector('.qa-content').insertBefore(showRepliesBtn, repliesContainer);
+        }
+        
+        // Ensure replies container is visible when adding a new reply
+        repliesContainer.style.display = 'block';
+        
+        // Add the reply to container
         repliesContainer.appendChild(replyElement);
         
         // Set up like functionality for the reply
@@ -628,19 +825,90 @@ document.addEventListener('DOMContentLoaded', function() {
                 toggleLike(this);
             });
         }
+        
+        // Add click handler for reply-to-reply button
+        const replyToReplyBtn = replyElement.querySelector('.qa-reply-to-reply-btn');
+        if (replyToReplyBtn && isAuthenticated) {
+            replyToReplyBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                const parentCommentId = this.getAttribute('data-comment-id');
+                const username = this.getAttribute('data-username');
+                
+                // Show the reply form
+                toggleReplyForm(parentCommentId);
+                
+                // Add username to input field
+                const replyInput = document.getElementById(`reply-input-${parentCommentId}`);
+                if (replyInput) {
+                    replyInput.value = `@${username} `;
+                    replyInput.focus();
+                    // Put cursor at the end
+                    replyInput.selectionStart = replyInput.selectionEnd = replyInput.value.length;
+                }
+            });
+        }
+
+        document.querySelectorAll('.qa-reply-to-reply-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const commentId = this.getAttribute('data-comment-id');
+                const username = this.getAttribute('data-username');
+                
+                // Show the reply form
+                const replyForm = document.getElementById(`reply-form-${commentId}`);
+                if (replyForm) {
+                    replyForm.style.display = 'flex';
+                    
+                    // Add username to input field - ensure only one @ is added
+                    const replyInput = document.getElementById(`reply-input-${commentId}`);
+                    if (replyInput) {
+                        // Remove any @ from the username if present
+                        const cleanUsername = username.startsWith('@') ? username.substring(1) : username;
+                        replyInput.value = `@${cleanUsername} `;
+                        replyInput.focus();
+                        // Put cursor at the end
+                        replyInput.selectionStart = replyInput.selectionEnd = replyInput.value.length;
+                    }
+                }
+            });
+        });
+        
+        // Update the reply count if needed
+        updateReplyCount(commentId);
+    }
+    
+    /**
+     * Update the reply count for a comment
+     */
+    function updateReplyCount(commentId) {
+        const commentElement = document.querySelector(`.qa-item[data-comment-id="${commentId}"]`);
+        if (!commentElement) return;
+        
+        const repliesContainer = commentElement.querySelector('.qa-replies');
+        const showRepliesBtn = commentElement.querySelector('.show-replies-btn');
+        
+        if (repliesContainer && showRepliesBtn) {
+            const replyCount = repliesContainer.querySelectorAll('.qa-reply').length;
+            
+            // Only update if currently showing the count
+            if (showRepliesBtn.getAttribute('data-shown') === 'false') {
+                showRepliesBtn.innerHTML = `Показать ответы (${replyCount})`;
+            }
+        }
     }
     
     /**
      * Create a DOM element for a reply
-     */
+    */
     function createReplyElement(reply) {
         const isAuthor = reply.user_id === videoUserId;
         
         const div = document.createElement('div');
         div.className = 'qa-reply';
         div.setAttribute('data-reply-id', reply.id);
+        div.setAttribute('data-user-id', reply.user_id); // Store user_id for referencing
         
         const displayName = reply.display_name || 'User';
+        const username = reply.user_id || 'user'; // Get actual username for @mentions
         const firstLetter = displayName.charAt(0);
         
         // Format date
@@ -655,390 +923,38 @@ document.addEventListener('DOMContentLoaded', function() {
             avatarContent = firstLetter;
         }
         
+        // Process text to handle @username replies
+        let replyText = reply.text;
+        if (replyText.startsWith('@')) {
+            // Format @username mentions with a highlight
+            const parts = replyText.split(' ');
+            if (parts.length > 0 && parts[0].startsWith('@')) {
+                const mention = parts[0];
+                replyText = replyText.replace(mention, `<span class="user-mention">${mention}</span>`);
+            }
+        }
+        
+        // We need to get the parent comment ID from the calling context
+        const parentCommentId = reply.parentCommentId; // This will be set by addReplyToComment
+        
         div.innerHTML = `
             <div class="user-avatar ${isAuthor ? 'author-avatar' : ''}">
                 ${avatarContent}
             </div>
             <div class="qa-content">
-                <div class="qa-author ${isAuthor ? 'is-author' : ''}">
+                <div class="qa-author ${isAuthor ? 'is-author' : ''}" data-username="${username}">
                     ${displayName}
                     ${isAuthor ? '<span class="author-badge">Автор</span>' : ''}
                 </div>
-                <div class="qa-text">${reply.text}</div>
+                <div class="qa-text">${replyText}</div>
                 <div class="qa-meta">${formattedDate}</div>
                 <div class="qa-actions">
                     <button class="qa-like" data-liked="false">👍 <span>${reply.likes || 0}</span></button>
+                    <button class="qa-reply-to-reply-btn" data-comment-id="${parentCommentId || ''}" data-username="${username}">Ответить</button>
                 </div>
             </div>
         `;
         
         return div;
     }
-    
-    /**
-     * Show a login modal for non-authenticated users
-     */
-    function showLoginModal() {
-        // Check if modal already exists
-        if (document.getElementById('login-modal')) return;
-        
-        // Create modal element
-        const modal = document.createElement('div');
-        modal.id = 'login-modal';
-        modal.className = 'login-modal';
-        
-        modal.innerHTML = `
-            <div class="login-modal-content">
-                <div class="login-modal-header">
-                    <h3>Авторизация требуется</h3>
-                    <span class="close-modal">&times;</span>
-                </div>
-                <div class="login-modal-body">
-                    <p>Чтобы оставлять комментарии и вопросы, необходимо авторизоваться.</p>
-                    <div class="login-modal-buttons">
-                        <a href="/login/?next=${encodeURIComponent(window.location.pathname)}" class="login-btn">Войти</a>
-                        <a href="/register/" class="register-btn">Зарегистрироваться</a>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        // Add to body
-        document.body.appendChild(modal);
-        
-        // Add close button functionality
-        const closeBtn = modal.querySelector('.close-modal');
-        closeBtn.addEventListener('click', function() {
-            closeLoginModal(modal);
-        });
-        
-        // Close when clicking outside
-        modal.addEventListener('click', function(e) {
-            if (e.target === modal) {
-                closeLoginModal(modal);
-            }
-        });
-        
-        // Add modal styles if they don't exist
-        if (!document.getElementById('login-modal-styles')) {
-            const style = document.createElement('style');
-            style.id = 'login-modal-styles';
-            style.textContent = `
-                .login-modal {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background-color: rgba(0, 0, 0, 0.7);
-                    z-index: 1000;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    animation: fadeIn 0.3s ease;
-                }
-                
-                @keyframes fadeIn {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
-                }
-                
-                .login-modal.fade-out {
-                    animation: fadeOut 0.3s ease;
-                }
-                
-                @keyframes fadeOut {
-                    from { opacity: 1; }
-                    to { opacity: 0; }
-                }
-                
-                .login-modal-content {
-                    background-color: var(--medium-bg, #07181f);
-                    border-radius: 10px;
-                    width: 90%;
-                    max-width: 400px;
-                    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-                }
-                
-                .login-modal-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    padding: 15px 20px;
-                    border-bottom: 1px solid rgba(159, 37, 88, 0.2);
-                }
-                
-                .login-modal-header h3 {
-                    margin: 0;
-                    color: var(--accent-color, #9f2558);
-                }
-                
-                .close-modal {
-                    font-size: 24px;
-                    cursor: pointer;
-                    color: var(--gray-color, #7a6563);
-                    transition: color 0.3s;
-                }
-                
-                .close-modal:hover {
-                    color: var(--accent-color, #9f2558);
-                }
-                
-                .login-modal-body {
-                    padding: 20px;
-                    color: var(--text-light, #fff8fa);
-                }
-                
-                .login-modal-buttons {
-                    display: flex;
-                    gap: 10px;
-                    margin-top: 20px;
-                    justify-content: center;
-                }
-                
-                .login-btn, .register-btn {
-                    padding: 10px 20px;
-                    border-radius: 20px;
-                    text-decoration: none;
-                    font-weight: bold;
-                    transition: all 0.3s;
-                }
-                
-                .login-btn {
-                    background-color: transparent;
-                    border: 2px solid var(--primary-color, #9f2558);
-                    color: var(--primary-color, #9f2558);
-                }
-                
-                .login-btn:hover {
-                    background-color: rgba(159, 37, 88, 0.1);
-                    transform: translateY(-3px);
-                }
-                
-                .register-btn {
-                    background-color: var(--accent-color, #9f2558);
-                    border: none;
-                    color: white;
-                    box-shadow: 0 3px 10px rgba(159, 37, 88, 0.3);
-                }
-                
-                .register-btn:hover {
-                    background-color: #7d1e46;
-                    transform: translateY(-3px);
-                    box-shadow: 0 5px 15px rgba(159, 37, 88, 0.4);
-                }
-            `;
-            
-            document.head.appendChild(style);
-        }
-    }
-    
-    /**
-     * Close login modal with animation
-     */
-    function closeLoginModal(modal) {
-        modal.classList.add('fade-out');
-        setTimeout(() => {
-            if (modal.parentNode) {
-                modal.parentNode.removeChild(modal);
-            }
-        }, 300);
-    }
-    
-    /**
-     * Show a status message (success or error)
-     */
-    function showStatusMessage(message, type = 'info') {
-        // Create message element
-        const messageEl = document.createElement('div');
-        messageEl.className = `status-message ${type}`;
-        messageEl.textContent = message;
-        
-        // Style based on type
-        if (type === 'error') {
-            messageEl.style.backgroundColor = 'rgba(255, 71, 87, 0.1)';
-            messageEl.style.color = '#ff4757';
-            messageEl.style.borderLeft = '3px solid #ff4757';
-        } else if (type === 'success') {
-            messageEl.style.backgroundColor = 'rgba(46, 213, 115, 0.1)';
-            messageEl.style.color = '#2ed573';
-            messageEl.style.borderLeft = '3px solid #2ed573';
-        } else {
-            messageEl.style.backgroundColor = 'rgba(54, 162, 235, 0.1)';
-            messageEl.style.color = '#36a2eb';
-            messageEl.style.borderLeft = '3px solid #36a2eb';
-        }
-        
-        // Apply common styles
-        messageEl.style.padding = '10px 15px';
-        messageEl.style.borderRadius = '8px';
-        messageEl.style.marginBottom = '20px';
-        messageEl.style.animation = 'fadeIn 0.3s ease';
-        
-        // Find insertion point (before the QA form)
-        const insertBefore = qaForm || qaList;
-        
-        if (insertBefore && insertBefore.parentNode) {
-            insertBefore.parentNode.insertBefore(messageEl, insertBefore);
-            
-            // Remove after 5 seconds
-            setTimeout(() => {
-                messageEl.style.animation = 'fadeOut 0.3s ease';
-                setTimeout(() => {
-                    if (messageEl.parentNode) {
-                        messageEl.parentNode.removeChild(messageEl);
-                    }
-                }, 300);
-            }, 5000);
-        }
-    }
-    
-    /**
-     * Get the current user's display name
-     */
-    function getCurrentUserName() {
-        // Try to get from the user dropdown if it exists
-        const userNameEl = document.querySelector('.user-dropdown .user-name');
-        if (userNameEl) {
-            return userNameEl.textContent.trim();
-        }
-        
-        // Fallback to username from avatar
-        const userAvatar = document.querySelector('.comment-form .user-avatar');
-        if (userAvatar) {
-            return userAvatar.textContent.trim();
-        }
-        
-        return 'User';
-    }
-    
-    /**
-     * Get the current user's initial for avatar
-     */
-    function getCurrentUserInitial() {
-        // Try to get from the comment form avatar
-        const userAvatar = document.querySelector('.comment-form .user-avatar');
-        if (userAvatar) {
-            return userAvatar.textContent.trim();
-        }
-        
-        // Try to get from display name
-        const displayName = getCurrentUserName();
-        if (displayName) {
-            return displayName.charAt(0);
-        }
-        
-        return 'U';
-    }
-    
-    /**
-     * Get the current user's avatar (HTML content)
-     */
-    function getCurrentUserAvatar() {
-        // Try to get avatar from the comment form
-        const userAvatar = document.querySelector('.comment-form .user-avatar');
-        if (userAvatar) {
-            return userAvatar.innerHTML;
-        }
-        
-        return getCurrentUserInitial();
-    }
-    
-    /**
-     * Format a date in a user-friendly way
-     */
-    function formatDate(date) {
-        if (!(date instanceof Date) || isNaN(date)) {
-            return 'Недавно';
-        }
-        
-        const now = new Date();
-        const diffMs = now - date;
-        const diffSec = Math.floor(diffMs / 1000);
-        const diffMin = Math.floor(diffSec / 60);
-        const diffHour = Math.floor(diffMin / 60);
-        const diffDay = Math.floor(diffHour / 24);
-        
-        // Just now
-        if (diffSec < 60) {
-            return 'Только что';
-        }
-        
-        // Minutes ago
-        if (diffMin < 60) {
-            return `${diffMin} ${getWordForm(diffMin, ['минуту', 'минуты', 'минут'])} назад`;
-        }
-        
-        // Hours ago
-        if (diffHour < 24) {
-            return `${diffHour} ${getWordForm(diffHour, ['час', 'часа', 'часов'])} назад`;
-        }
-        
-        // Days ago
-        if (diffDay < 7) {
-            return `${diffDay} ${getWordForm(diffDay, ['день', 'дня', 'дней'])} назад`;
-        }
-        
-        // Regular date for older dates
-        return date.toLocaleDateString();
-    }
-    
-    /**
-     * Get correct word form for Russian language based on number
-     */
-    function getWordForm(number, forms) {
-        const cases = [2, 0, 1, 1, 1, 2];
-        const mod100 = number % 100;
-        const mod10 = number % 10;
-        
-        if (mod100 > 4 && mod100 < 20) {
-            return forms[2];
-        }
-        
-        return forms[cases[Math.min(mod10, 5)]];
-    }
-    
-    /**
-     * Create CSS animations for status messages if they don't exist
-     */
-    function createCssAnimations() {
-        if (document.getElementById('qa-animations-style')) return;
-        
-        const style = document.createElement('style');
-        style.id = 'qa-animations-style';
-        
-        style.textContent = `
-            @keyframes fadeIn {
-                from { opacity: 0; transform: translateY(-10px); }
-                to { opacity: 1; transform: translateY(0); }
-            }
-            
-            @keyframes fadeOut {
-                from { opacity: 1; transform: translateY(0); }
-                to { opacity: 0; transform: translateY(-10px); }
-            }
-            
-            .qa-like.liked {
-                color: var(--accent-color, #9f2558);
-                font-weight: bold;
-            }
-            
-            .qa-like.liked span {
-                font-weight: bold;
-            }
-            
-            .reply-form {
-                display: none;
-            }
-            
-            .reply-form.visible {
-                display: flex !important;
-            }
-        `;
-        
-        document.head.appendChild(style);
-    }
-    
-    // Initialize CSS animations
-    createCssAnimations();
 });
