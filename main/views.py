@@ -22,6 +22,7 @@ import uuid
 import logging
 import datetime
 import requests
+import json
 from django.http import JsonResponse
 logger = logging.getLogger(__name__)
 
@@ -378,14 +379,27 @@ def search_results(request):
     limit = int(request.GET.get('limit', 20))
     json_response = request.GET.get('format') == 'json'
     
+    debug_info = {
+        'query': query,
+        'offset': offset,
+        'limit': limit,
+        'debug_enabled': True,
+        'scan_steps': [],
+        'errors': []
+    }
+    
     if not query:
         if json_response:
             return JsonResponse({'videos': [], 'total': 0})
         return render(request, 'main/search.html', {'query': query, 'videos': []})
     
-    # Search implementation using GCS
+    # Search implementation using GCS - improved version
     try:
-        from .gcs_storage import list_user_videos, get_bucket, BUCKET_NAME, generate_video_url
+        from .gcs_storage import get_bucket, BUCKET_NAME, generate_video_url
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        logger.info(f"Searching for: '{query}' with offset={offset}, limit={limit}")
         
         # Get bucket
         bucket = get_bucket(BUCKET_NAME)
@@ -395,88 +409,164 @@ def search_results(request):
             return render(request, 'main/search.html', {'query': query, 'videos': []})
             
         # Get list of users
-        blobs = bucket.list_blobs(delimiter='/')
-        prefixes = list(blobs.prefixes)
-        users = [prefix.replace('/', '') for prefix in prefixes]
+        blobs = list(bucket.list_blobs(max_results=100))
+        users = set()
+        for blob in blobs:
+            parts = blob.name.split('/')
+            if parts and parts[0] and parts[0].startswith('@'):
+                users.add(parts[0])
         
-        # Search across all videos
+        debug_info['scan_steps'].append(f"Найдено пользователей: {len(users)}")
+        debug_info['users'] = users[:10]  # Первые 10 пользователей для отладки
+        
+        # Поиск по всем пользователям и их видео
         search_results = []
+        query_lower = query.lower()
+        
+        # Отдельно создаем список всех найденных видео для отладки
+        all_videos_found = []
+        
+        # Перебираем всех пользователей
         for user_id in users:
-            user_videos = list_user_videos(user_id)
-            if user_videos:
-                for video in user_videos:
-                    # Add user_id to each video
-                    if 'user_id' not in video:
-                        video['user_id'] = user_id
-                    
-                    # Check for match with search query
-                    title = video.get('title', '').lower()
-                    description = video.get('description', '').lower()
-                    channel = user_id.lower()  # Search by username
-                    query_lower = query.lower()
-                    
-                    # If there's a match, add video to results
-                    if (query_lower in title or 
-                        query_lower in description or 
-                        query_lower in channel):
-                        
-                        # Add URL for video
-                        video_id = video.get('video_id')
-                        video['url'] = f"/video/{user_id}__{video_id}/"
-                        
-                        # Add thumbnail URL if available
-                        if 'thumbnail_path' in video:
-                            video['thumbnail_url'] = generate_video_url(
-                                user_id, 
-                                video_id, 
-                                file_path=video['thumbnail_path'], 
-                                expiration_time=3600
-                            )
+            try:
+                # Проверяем наличие метаданных
+                metadata_prefix = f"{user_id}/metadata/"
+                metadata_blobs = list(bucket.list_blobs(prefix=metadata_prefix))
+                
+                debug_info['scan_steps'].append(f"Пользователь {user_id}: найдено {len(metadata_blobs)} файлов метаданных")
+                
+                # Проверяем все файлы метаданных для поиска совпадений
+                for blob in metadata_blobs:
+                    try:
+                        if blob.name.endswith('.json'):
+                            metadata_text = blob.download_as_text()
+                            video_data = json.loads(metadata_text)
                             
-                        # Format data for display
-                        views = video.get('views', 0)
-                        if isinstance(views, int) or (isinstance(views, str) and views.isdigit()):
-                            views = int(views)
-                            if views >= 1000:
-                                video['views_formatted'] = f"{views // 1000}K просмотров"
-                            else:
-                                video['views_formatted'] = f"{views} просмотров"
-                        else:
-                            video['views_formatted'] = "0 просмотров"
+                            # Сохраняем название видео для отладки
+                            video_title = video_data.get('title', 'Без названия')
+                            all_videos_found.append({
+                                'user_id': user_id,
+                                'video_id': video_data.get('video_id', 'unknown'),
+                                'title': video_title
+                            })
                             
-                        # Display name for channel
-                        if 'channel' not in video:
-                            video['channel'] = user_id
+                            # Проверяем на совпадение в заголовке и описании, учитывая регистр
+                            title = (video_data.get('title') or '').lower()
+                            description = (video_data.get('description') or '').lower()
                             
-                        search_results.append(video)
+                            if query_lower in title or query_lower in description:
+                                debug_info['scan_steps'].append(f"СОВПАДЕНИЕ найдено в видео: {video_title}")
+                                
+                                # Добавляем user_id к видео, если его нет
+                                if 'user_id' not in video_data:
+                                    video_data['user_id'] = user_id
+                                
+                                # Форматируем просмотры для отображения
+                                views = video_data.get('views', 0)
+                                if isinstance(views, (int, str)) and str(views).isdigit():
+                                    views = int(views)
+                                    video_data['views_formatted'] = f"{views // 1000}K просмотров" if views >= 1000 else f"{views} просмотров"
+                                else:
+                                    video_data['views_formatted'] = "0 просмотров"
+                                
+                                # Форматируем дату загрузки
+                                upload_date = video_data.get('upload_date', '')
+                                if upload_date:
+                                    try:
+                                        from datetime import datetime
+                                        upload_datetime = datetime.fromisoformat(upload_date)
+                                        video_data['upload_date_formatted'] = upload_datetime.strftime("%d.%m.%Y")
+                                    except Exception as e:
+                                        video_data['upload_date_formatted'] = upload_date[:10] if upload_date else "Недавно"
+                                        debug_info['errors'].append(f"Ошибка форматирования даты: {str(e)}")
+                                
+                                # Добавляем в результаты поиска
+                                search_results.append(video_data)
+                    except Exception as e:
+                        error_msg = f"Ошибка при обработке метаданных {blob.name}: {str(e)}"
+                        logger.error(error_msg)
+                        debug_info['errors'].append(error_msg)
+            except Exception as e:
+                error_msg = f"Ошибка при обработке пользователя {user_id}: {str(e)}"
+                logger.error(error_msg)
+                debug_info['errors'].append(error_msg)
         
-        # Sort by relevance/recency
-        search_results.sort(key=lambda x: x.get('upload_date', ''), reverse=True)
+        # Сохраняем первые 10 видео из всех найденных для отладки
+        debug_info['all_videos_sample'] = all_videos_found[:10]
+        debug_info['total_videos_found'] = len(all_videos_found)
         
-        # Apply offset and limit
+        # Записываем в отладочную информацию, если видео с "CORE" в названии
+        core_videos = [v for v in all_videos_found if 'CORE' in v.get('title', '').upper()]
+        debug_info['core_videos_count'] = len(core_videos)
+        debug_info['core_videos'] = core_videos[:5]  # Первые 5 видео с CORE в названии
+        
+        # Если результатов нет, логируем это
+        if not search_results:
+            msg = f"По запросу '{query}' ничего не найдено"
+            logger.warning(msg)
+            debug_info['scan_steps'].append(msg)
+        else:
+            debug_info['scan_steps'].append(f"Всего найдено результатов: {len(search_results)}")
+        
+        # Сортируем результаты по релевантности
+        def sort_by_relevance(video):
+            title = (video.get('title') or '').lower()
+            description = (video.get('description') or '').lower()
+            
+            if title == query_lower:
+                return 0  # Точное совпадение с заголовком
+            elif title.startswith(query_lower):
+                return 1  # Заголовок начинается с запроса
+            elif query_lower in title:
+                return 2  # Запрос содержится в заголовке
+            elif description == query_lower:
+                return 3  # Точное совпадение с описанием
+            elif description.startswith(query_lower):
+                return 4  # Описание начинается с запроса
+            else:
+                return 5  # Запрос содержится в описании
+                
+        search_results.sort(key=sort_by_relevance)
+        
+        # Применяем пагинацию
         total_results = len(search_results)
         paginated_results = search_results[offset:offset + limit]
         
-        # JSON response for AJAX pagination
+        debug_info['total_results'] = total_results
+        debug_info['results_returned'] = len(paginated_results)
+        
+        # Формируем ответ в JSON для AJAX
         if json_response:
             return JsonResponse({
+                'success': True,
                 'videos': paginated_results,
-                'total': total_results
+                'total': total_results,
+                'debug': debug_info
             })
         
-        # Regular HTML response
+        # Обычный HTML-ответ для страницы
         return render(request, 'main/search.html', {
             'query': query,
             'videos': paginated_results,
-            'total': total_results
+            'total': total_results,
+            'debug': debug_info
         })
     except Exception as e:
-        logger.error(f"Error during search: {e}")
+        import traceback
+        error_msg = f"Общая ошибка при поиске: {str(e)}"
+        logger.error(error_msg)
+        logger.error(traceback.format_exc())
+        
+        debug_info['errors'].append(error_msg)
+        debug_info['traceback'] = traceback.format_exc()
+        
         if json_response:
-            return JsonResponse({'error': str(e), 'videos': []}, status=500)
+            return JsonResponse({'error': str(e), 'videos': [], 'debug': debug_info}, status=500)
         return render(request, 'main/search.html', {
             'query': query,
-            'videos': []
+            'videos': [],
+            'error': str(e),
+            'debug': debug_info
         })
 
 def send_verification_code(request, email):
@@ -818,24 +908,6 @@ def profile_view(request):
     
     return render(request, 'accounts/profile.html', {'form': form})
 
-# @login_required
-# def studio_view(request):
-#     """
-#     View for the creator studio page.
-#     Only authenticated users who are approved authors can access this page.
-#     """
-#     # Проверяем, является ли пользователь автором
-#     if not request.user.profile.is_author:
-#         messages.error(request, 'У вас нет доступа к Студии. Вы должны стать автором, чтобы получить доступ.')
-#         return redirect('become_author')
-        
-#     # Для демонстрации, мы будем использовать пустой список видео
-#     videos = []
-    
-#     return render(request, 'studio/studio.html', {
-#         'videos': videos
-#     })
-
 @login_required
 def author_application(request):
     # Проверяем, уже ли пользователь автор или подал заявку
@@ -1006,3 +1078,93 @@ def base_context_processor(request):
             logger.error(f"Error loading user profile for context: {e}")
     
     return context
+
+def search_page(request):
+    """
+    Dedicated search page with just a search box (Google-like)
+    """
+    return render(request, 'main/search_page.html')
+
+def debug_storage(request):
+    """
+    Страница для отладки хранилища GCS
+    """
+    context = {
+        'debug_info': {
+            'title': 'Отладка хранилища GCS',
+            'storage_name': None,
+            'connection_status': 'Неизвестно',
+            'users': [],
+            'user_count': 0,
+            'videos': [],
+            'video_count': 0,
+            'errors': []
+        }
+    }
+    
+    try:
+        from .gcs_storage import get_bucket, BUCKET_NAME
+        import json
+        
+        context['debug_info']['storage_name'] = BUCKET_NAME
+        
+        # Получаем бакет
+        bucket = get_bucket(BUCKET_NAME)
+        if not bucket:
+            context['debug_info']['connection_status'] = 'Ошибка: не удалось подключиться к хранилищу'
+            context['debug_info']['errors'].append('Не удалось получить бакет')
+            return render(request, 'main/debug_storage.html', context)
+        
+        context['debug_info']['connection_status'] = 'Подключение установлено'
+        
+        # Получаем список пользователей
+        blobs = bucket.list_blobs(delimiter='/')
+        prefixes = list(blobs.prefixes)
+        users = [prefix.replace('/', '') for prefix in prefixes if not prefix.startswith('system/')]
+        
+        context['debug_info']['users'] = users
+        context['debug_info']['user_count'] = len(users)
+        
+        # Получаем информацию о видео в хранилище
+        videos_info = []
+        videos_with_core = []
+        
+        for user_id in users[:5]:  # Ограничимся первыми 5 пользователями для скорости
+            # Ищем папку metadata для пользователя
+            metadata_prefix = f"{user_id}/metadata/"
+            metadata_blobs = list(bucket.list_blobs(prefix=metadata_prefix))
+            
+            for blob in metadata_blobs:
+                if blob.name.endswith('.json'):
+                    try:
+                        metadata_text = blob.download_as_text()
+                        metadata = json.loads(metadata_text)
+                        video_title = metadata.get('title', 'Без названия')
+                        video_id = metadata.get('video_id', 'unknown')
+                        
+                        video_info = {
+                            'user_id': user_id,
+                            'video_id': video_id,
+                            'title': video_title,
+                            'path': blob.name
+                        }
+                        
+                        videos_info.append(video_info)
+                        
+                        # Проверяем наличие CORE в названии
+                        if 'CORE' in video_title.upper():
+                            videos_with_core.append(video_info)
+                    except Exception as e:
+                        context['debug_info']['errors'].append(f"Ошибка при обработке метаданных {blob.name}: {str(e)}")
+        
+        context['debug_info']['videos'] = videos_info
+        context['debug_info']['video_count'] = len(videos_info)
+        context['debug_info']['videos_with_core'] = videos_with_core
+        context['debug_info']['videos_with_core_count'] = len(videos_with_core)
+        
+    except Exception as e:
+        import traceback
+        context['debug_info']['errors'].append(f"Общая ошибка: {str(e)}")
+        context['debug_info']['traceback'] = traceback.format_exc()
+    
+    return render(request, 'main/debug_storage.html', context)

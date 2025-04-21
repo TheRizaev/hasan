@@ -195,7 +195,7 @@
                     <div class="menu-icon"><img src="/static/icons/calendar.svg" alt="Light mode" width="24" height="24"></div>
                     <div class="menu-text">Расписание</div>
                 </div>
-                <div class="menu-item">
+                <div class="menu-item {% if request.path == '/search-page/' %}active{% endif %}" onclick="window.location.href='{% url 'search_page' %}'">
                     <div class="menu-icon"><img src="/static/icons/loop.svg" alt="Light mode" width="24" height="24"></div>
                     <div class="menu-text">Поиск</div>
                 </div>
@@ -208,6 +208,7 @@
     </div>
     
     <script src="{% static 'js/main.js' %}"></script>
+    <script src="{% static 'js/search.js' %}"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

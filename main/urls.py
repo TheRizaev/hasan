@@ -1,3 +1,5 @@
+# Добавьте в main/urls.py
+
 from django.urls import path
 from . import views
 from . import gcs_views 
@@ -7,6 +9,8 @@ urlpatterns = [
     path('', views.index, name='index'),  # Main page
     path('video/<str:video_id>/', views.video_detail, name='video_detail_gcs'),  # New GCS video detail page
     path('search/', views.search_results, name='search_results'),  # Search results page
+    path('search-page/', views.search_page, name='search_page'),  # Google-like search page
+    path('debug-storage/', views.debug_storage, name='debug_storage'),  # Отладка хранилища
     path('register/', views.register_view, name='register'),  # Registration page
     path('verify-email/', views.verify_email_view, name='verify_email'),  # Email verification page
     path('user-details/', views.user_details_view, name='user_details'),  # New user details page

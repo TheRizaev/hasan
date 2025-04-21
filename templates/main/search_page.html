@@ -1,0 +1,179 @@
+{% extends 'main/base.html' %}
+{% load static %}
+
+{% block title %}KRONIK Search{% endblock %}
+
+{% block content %}
+<div class="search-page-container">
+    <div class="search-page-logo">
+        <img src="{% static 'Kronik-Light1.png' %}" alt="KRONIK" width="180" height="180">
+        <h1 class="search-page-title">KRONIK</h1>
+    </div>
+    
+    <div class="search-page-form">
+        <form action="{% url 'search_results' %}" method="GET" class="big-search-form">
+            <div class="big-search-bar">
+                <input type="text" name="query" id="big-search-input" placeholder="Поиск знаний...">
+                <button type="submit" class="big-search-button">
+                    <img src="{% static 'icons/loop.svg' %}" alt="Search" width="24" height="24">
+                </button>
+            </div>
+        </form>
+    </div>
+    
+    <div class="search-popular-tags">
+        <span>Популярные поиски:</span>
+        <a href="{% url 'search_results' %}?query=Python" class="popular-tag">Python</a>
+        <a href="{% url 'search_results' %}?query=математика" class="popular-tag">Математика</a>
+        <a href="{% url 'search_results' %}?query=физика" class="popular-tag">Физика</a>
+        <a href="{% url 'search_results' %}?query=история" class="popular-tag">История</a>
+        <a href="{% url 'search_results' %}?query=программирование" class="popular-tag">Программирование</a>
+    </div>
+</div>
+
+<style>
+    .search-page-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: calc(100vh - 250px);
+        padding: 20px;
+        text-align: center;
+    }
+    
+    .search-page-logo {
+        margin-bottom: 30px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .search-page-title {
+        font-size: 56px;
+        font-weight: bold;
+        color: var(--primary-color);
+        margin: 10px 0;
+        animation: fadeIn 1s ease;
+    }
+    
+    .search-page-form {
+        width: 100%;
+        max-width: 600px;
+        margin: 0 auto 40px;
+    }
+    
+    .big-search-bar {
+        position: relative;
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        box-shadow: 0 5px 20px rgba(159, 37, 88, 0.2);
+        border-radius: 30px;
+        padding: 5px;
+        background-color: rgba(255, 255, 255, 0.1);
+        border: 2px solid rgba(159, 37, 88, 0.2);
+        transition: all 0.3s ease;
+    }
+    
+    .dark-theme .big-search-bar {
+        background-color: rgba(255, 255, 255, 0.05);
+    }
+    
+    .big-search-bar:focus-within {
+        box-shadow: 0 8px 25px rgba(159, 37, 88, 0.3);
+        border-color: var(--primary-color);
+        transform: translateY(-3px);
+    }
+    
+    #big-search-input {
+        width: 100%;
+        padding: 15px 25px;
+        border: none;
+        border-radius: 30px;
+        font-size: 18px;
+        background: transparent;
+        color: inherit;
+        outline: none;
+    }
+    
+    .big-search-button {
+        background: none;
+        border: none;
+        position: absolute;
+        right: 15px;
+        cursor: pointer;
+        padding: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.3s;
+    }
+    
+    .big-search-button:hover {
+        transform: scale(1.1);
+    }
+    
+    .search-popular-tags {
+        margin-top: 20px;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 10px;
+        color: var(--gray-color);
+    }
+    
+    .popular-tag {
+        display: inline-block;
+        padding: 8px 15px;
+        background-color: rgba(159, 37, 88, 0.1);
+        border-radius: 20px;
+        color: var(--primary-color);
+        text-decoration: none;
+        transition: all 0.3s;
+    }
+    
+    .popular-tag:hover {
+        background-color: rgba(159, 37, 88, 0.2);
+        transform: translateY(-2px);
+    }
+    
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    @media (max-width: 768px) {
+        .search-page-title {
+            font-size: 40px;
+        }
+        
+        #big-search-input {
+            padding: 12px 20px;
+            font-size: 16px;
+        }
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Focus the search input when the page loads
+    document.getElementById('big-search-input').focus();
+    
+    // Handle form submission
+    document.querySelector('.big-search-form').addEventListener('submit', function(e) {
+        const query = document.getElementById('big-search-input').value.trim();
+        if (!query) {
+            e.preventDefault();
+        }
+    });
+});
+</script>
+{% endblock %}

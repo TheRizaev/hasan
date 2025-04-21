@@ -5,7 +5,7 @@
 
 {% block content %}
 <div class="search-results-container">
-    <h1 class="search-heading">Результаты поиска: <span class="search-query">{{ query }}</span></h1>
+    <h1 class="search-heading">Результаты поиска: <span class="search-query">{{ query }}</span> 🐰</h1>
     
     <div class="search-filter">
         <div class="filter-item active" data-filter="all">Все</div>
@@ -50,18 +50,113 @@
                         <a href="/search?query=математика" class="suggestion-tag">математика</a>
                         <a href="/search?query=физика" class="suggestion-tag">физика</a>
                         <a href="/search?query=история" class="suggestion-tag">история</a>
-                        <a href="/search?query=уроки" class="suggestion-tag">уроки</a>
+                        <a href="/search?query=CORE" class="suggestion-tag">CORE</a>
                     </div>
                 </div>
             </div>
         {% endif %}
     </div>
     
-    {% if videos|length == 20 %}
+    {% if videos|length >= 10 %}
     <div class="load-more-container">
         <button id="load-more-btn" class="load-more-button">Загрузить ещё</button>
     </div>
     {% endif %}
+    
+    <!-- Отладочная информация -->
+    <div class="debug-toggle-container">
+        <button id="toggle-debug" class="debug-toggle">Показать отладочную информацию</button>
+    </div>
+    
+    <div id="debug-info" class="debug-info" style="display:none;">
+        <h3>Отладочная информация</h3>
+        
+        <div class="debug-section">
+            <h4>Параметры запроса</h4>
+            <div class="debug-content">
+                <p><strong>Запрос:</strong> {{ debug.query }}</p>
+                <p><strong>Смещение:</strong> {{ debug.offset }}</p>
+                <p><strong>Лимит:</strong> {{ debug.limit }}</p>
+                <p><strong>Всего найдено видео:</strong> {{ debug.total_videos_found|default:"0" }}</p>
+                <p><strong>Найдено результатов:</strong> {{ debug.total_results|default:"0" }}</p>
+                <p><strong>Возвращено результатов:</strong> {{ debug.results_returned|default:"0" }}</p>
+            </div>
+        </div>
+        
+        <div class="debug-section">
+            <h4>Шаги поиска</h4>
+            <div class="debug-content">
+                <ol>
+                    {% for step in debug.scan_steps %}
+                    <li>{{ step }}</li>
+                    {% empty %}
+                    <li>Нет информации о шагах поиска</li>
+                    {% endfor %}
+                </ol>
+            </div>
+        </div>
+        
+        {% if debug.core_videos_count is not None %}
+        <div class="debug-section">
+            <h4>Видео с "CORE" в названии ({{ debug.core_videos_count }})</h4>
+            <div class="debug-content">
+                <ul>
+                    {% for video in debug.core_videos %}
+                    <li>{{ video.title }} ({{ video.user_id }}/{{ video.video_id }})</li>
+                    {% empty %}
+                    <li>Не найдено видео с "CORE" в названии</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+        
+        <div class="debug-section">
+            <h4>Пользователи ({{ debug.users|length }} из {{ debug.users|length }})</h4>
+            <div class="debug-content">
+                <ul>
+                    {% for user in debug.users %}
+                    <li>{{ user }}</li>
+                    {% empty %}
+                    <li>Нет информации о пользователях</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        
+        <div class="debug-section">
+            <h4>Примеры найденных видео ({{ debug.all_videos_sample|length }} из {{ debug.total_videos_found|default:"0" }})</h4>
+            <div class="debug-content">
+                <ul>
+                    {% for video in debug.all_videos_sample %}
+                    <li>{{ video.title }} ({{ video.user_id }}/{{ video.video_id }})</li>
+                    {% empty %}
+                    <li>Нет информации о найденных видео</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        
+        <div class="debug-section">
+            <h4>Ошибки</h4>
+            <div class="debug-content">
+                <ul>
+                    {% for error in debug.errors %}
+                    <li class="error">{{ error }}</li>
+                    {% empty %}
+                    <li>Нет ошибок</li>
+                    {% endfor %}
+                </ul>
+                
+                {% if debug.traceback %}
+                <div class="debug-traceback">
+                    <h5>Traceback</h5>
+                    <pre>{{ debug.traceback }}</pre>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
 </div>
 
 <style>
@@ -129,26 +224,184 @@
     .lazy-thumbnail.loading {
         opacity: 0.5;
     }
+    
+    /* Debug info styles */
+    .debug-toggle-container {
+        display: flex;
+        justify-content: center;
+        margin: 30px 0 10px;
+    }
+    
+    .debug-toggle {
+        background-color: #444;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.3s;
+    }
+    
+    .debug-toggle:hover {
+        background-color: #666;
+    }
+    
+    .debug-info {
+        margin: 20px 0;
+        padding: 20px;
+        background-color: #f5f5f5;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+        font-family: monospace;
+        font-size: 14px;
+    }
+    
+    .dark-theme .debug-info {
+        background-color: #222;
+        border-color: #444;
+        color: #ddd;
+    }
+    
+    .debug-section {
+        margin-bottom: 20px;
+        border-bottom: 1px solid #ddd;
+        padding-bottom: 10px;
+    }
+    
+    .dark-theme .debug-section {
+        border-color: #444;
+    }
+    
+    .debug-section h4 {
+        background-color: #eee;
+        padding: 8px 12px;
+        margin: 10px 0;
+        border-radius: 4px;
+        color: #333;
+    }
+    
+    .dark-theme .debug-section h4 {
+        background-color: #333;
+        color: #fff;
+    }
+    
+    .debug-content {
+        padding: 0 12px;
+    }
+    
+    .debug-info .error {
+        color: #e74c3c;
+    }
+    
+    .debug-traceback {
+        margin-top: 10px;
+        padding: 10px;
+        background-color: #eee;
+        border-radius: 4px;
+        overflow-x: auto;
+    }
+    
+    .dark-theme .debug-traceback {
+        background-color: #333;
+    }
+    
+    .debug-traceback pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
 </style>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Setup filter functionality
+        // Инициализация ленивой загрузки для миниатюр
+        initializeLazyLoading();
+        
+        // Настройка фильтров
+        setupFilters();
+        
+        // Настройка кнопки "Загрузить еще"
+        setupLoadMore();
+
+        setupDebugToggle();
+    });
+    
+    // Ленивая загрузка миниатюр
+    function initializeLazyLoading() {
+        if ('IntersectionObserver' in window) {
+            const imageObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const img = entry.target;
+                        const videoId = img.getAttribute('data-video-id');
+                        const userId = img.getAttribute('data-user-id');
+                        
+                        if (videoId && userId) {
+                            // Проверяем наличие URL в sessionStorage
+                            const cachedUrl = sessionStorage.getItem(`thumbnail_${userId}__${videoId}`);
+                            
+                            if (cachedUrl) {
+                                img.src = cachedUrl;
+                                img.classList.remove('lazy-thumbnail', 'loading');
+                                imageObserver.unobserve(img);
+                            } else {
+                                // Отмечаем как загружаемый
+                                img.classList.add('loading');
+                                
+                                // Запрашиваем URL миниатюры
+                                fetch(`/api/get-thumbnail-url/${userId}__${videoId}/`)
+                                    .then(response => response.json())
+                                    .then(data => {
+                                        if (data.success && data.url) {
+                                            // Кэшируем URL
+                                            sessionStorage.setItem(`thumbnail_${userId}__${videoId}`, data.url);
+                                            
+                                            // Устанавливаем источник изображения
+                                            img.src = data.url;
+                                            img.classList.remove('lazy-thumbnail', 'loading');
+                                            
+                                            // Прекращаем наблюдение
+                                            imageObserver.unobserve(img);
+                                        }
+                                    })
+                                    .catch(error => {
+                                        console.error('Ошибка загрузки миниатюры:', error);
+                                        img.classList.remove('loading');
+                                    });
+                            }
+                        }
+                    }
+                });
+            }, {
+                rootMargin: '200px 0px',
+                threshold: 0.01
+            });
+            
+            // Наблюдаем за всеми ленивыми миниатюрами
+            document.querySelectorAll('.lazy-thumbnail').forEach(img => {
+                imageObserver.observe(img);
+            });
+        }
+    }
+    
+    // Настройка фильтров
+    function setupFilters() {
         const filterItems = document.querySelectorAll('.filter-item');
         const resultItems = document.querySelectorAll('.search-result-item');
         
         filterItems.forEach(item => {
             item.addEventListener('click', function() {
-                // Remove active class from all filters
+                // Снимаем активный класс со всех фильтров
                 filterItems.forEach(filter => filter.classList.remove('active'));
                 
-                // Add active class to selected filter
+                // Добавляем активный класс выбранному фильтру
                 this.classList.add('active');
                 
-                // Get filter type
+                // Получаем тип фильтра
                 const filterType = this.getAttribute('data-filter');
                 
-                // Show/hide results based on filter
+                // Показываем/скрываем результаты в зависимости от фильтра
                 resultItems.forEach(result => {
                     if (filterType === 'all' || result.getAttribute('data-type') === filterType) {
                         result.style.display = 'flex';
@@ -158,150 +411,110 @@
                 });
             });
         });
-        
-        // Initialize lazy loading for thumbnails
-        initializeLazyLoading();
-        
-        // Setup load more functionality
+    }
+    
+    // Настройка кнопки "Загрузить еще"
+    function setupLoadMore() {
         const loadMoreBtn = document.getElementById('load-more-btn');
-        let currentOffset = {{ videos|length }};
         
-        if (loadMoreBtn) {
-            loadMoreBtn.addEventListener('click', function() {
-                this.textContent = 'Загрузка...';
-                this.disabled = true;
-                
-                // Fetch more results
-                fetch(`/search?query={{ query }}&offset=${currentOffset}&format=json`)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.videos && data.videos.length > 0) {
-                            // Append new results
-                            appendSearchResults(data.videos);
-                            
-                            // Update offset
-                            currentOffset += data.videos.length;
-                            
-                            // Re-enable button if there are more results
-                            if (data.videos.length < 20) {
-                                loadMoreBtn.style.display = 'none';
-                            } else {
-                                loadMoreBtn.textContent = 'Загрузить ещё';
-                                loadMoreBtn.disabled = false;
-                            }
-                            
-                            // Re-initialize lazy loading
-                            initializeLazyLoading();
-                        } else {
-                            loadMoreBtn.style.display = 'none';
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error loading more results:', error);
-                        loadMoreBtn.textContent = 'Ошибка загрузки';
-                        setTimeout(() => {
-                            loadMoreBtn.textContent = 'Попробовать снова';
-                            loadMoreBtn.disabled = false;
-                        }, 2000);
-                    });
-            });
-        }
+        if (!loadMoreBtn) return;
         
-        // Function to append new search results
-        function appendSearchResults(videos) {
-            const container = document.getElementById('search-results-container');
+        // Получаем параметры из URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const query = urlParams.get('query');
+        
+        // Определяем начальное смещение для следующей порции
+        let currentOffset = parseInt(document.querySelectorAll('.search-result-item').length);
+        
+        loadMoreBtn.addEventListener('click', function() {
+            this.textContent = 'Загрузка...';
+            this.disabled = true;
             
-            videos.forEach(video => {
-                const resultItem = document.createElement('div');
-                resultItem.className = 'search-result-item';
-                resultItem.setAttribute('data-type', 'videos');
-                resultItem.onclick = function() {
-                    window.location.href = `/video/${video.user_id}__${video.video_id}/`;
-                };
-                
-                const thumbnailUrl = video.thumbnail_url || '/static/placeholder.jpg';
-                const displayName = video.display_name || video.channel || 'Unknown';
-                const firstLetter = displayName.charAt(0);
-                
-                resultItem.innerHTML = `
-                    <div class="result-thumbnail">
-                        <img src="${thumbnailUrl}" alt="${video.title}" loading="lazy" onerror="this.src='/static/placeholder.jpg'" ${!video.thumbnail_url ? `data-user-id="${video.user_id}" data-video-id="${video.video_id}" class="lazy-thumbnail"` : ''}>
-                        <div class="result-duration">${video.duration || '00:00'}</div>
+            // Запрашиваем следующую порцию результатов
+            fetch(`/search?query=${encodeURIComponent(query)}&offset=${currentOffset}&format=json`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.videos && data.videos.length > 0) {
+                        // Добавляем новые результаты
+                        appendSearchResults(data.videos);
+                        
+                        // Обновляем смещение
+                        currentOffset += data.videos.length;
+                        
+                        // Активируем кнопку, если есть еще результаты
+                        if (data.videos.length < 20 || currentOffset >= data.total) {
+                            loadMoreBtn.style.display = 'none';
+                        } else {
+                            loadMoreBtn.textContent = 'Загрузить ещё';
+                            loadMoreBtn.disabled = false;
+                        }
+                        
+                        // Переинициализируем ленивую загрузку
+                        initializeLazyLoading();
+                    } else {
+                        loadMoreBtn.style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    console.error('Ошибка загрузки результатов:', error);
+                    loadMoreBtn.textContent = 'Ошибка загрузки';
+                    setTimeout(() => {
+                        loadMoreBtn.textContent = 'Попробовать снова';
+                        loadMoreBtn.disabled = false;
+                    }, 2000);
+                });
+        });
+    }
+    
+    // Добавление результатов поиска
+    function appendSearchResults(videos) {
+        const container = document.getElementById('search-results-container');
+        
+        videos.forEach(video => {
+            const resultItem = document.createElement('div');
+            resultItem.className = 'search-result-item';
+            resultItem.setAttribute('data-type', 'videos');
+            resultItem.onclick = function() {
+                window.location.href = `/video/${video.user_id}__${video.video_id}/`;
+            };
+            
+            const thumbnailUrl = video.thumbnail_url || '/static/placeholder.jpg';
+            const displayName = video.display_name || video.channel || 'Unknown';
+            const firstLetter = displayName.charAt(0);
+            
+            resultItem.innerHTML = `
+                <div class="result-thumbnail">
+                    <img src="${thumbnailUrl}" alt="${video.title}" loading="lazy" onerror="this.src='/static/placeholder.jpg'" ${!video.thumbnail_url ? `data-user-id="${video.user_id}" data-video-id="${video.video_id}" class="lazy-thumbnail"` : ''}>
+                    <div class="result-duration">${video.duration || '00:00'}</div>
+                </div>
+                <div class="result-details">
+                    <h3 class="result-title">${video.title}</h3>
+                    <div class="result-meta">${video.views_formatted || '0 просмотров'} • ${video.upload_date_formatted || 'Недавно'}</div>
+                    <div class="result-channel">
+                        <div class="channel-avatar">${firstLetter}</div>
+                        <div class="channel-name">${displayName}</div>
                     </div>
-                    <div class="result-details">
-                        <h3 class="result-title">${video.title}</h3>
-                        <div class="result-meta">${video.views_formatted || '0 просмотров'} • ${video.upload_date_formatted || 'Недавно'}</div>
-                        <div class="result-channel">
-                            <div class="channel-avatar">${firstLetter}</div>
-                            <div class="channel-name">${displayName}</div>
-                        </div>
-                        <div class="result-description">
-                            ${video.description ? (video.description.length > 150 ? video.description.substring(0, 147) + '...' : video.description) : ''}
-                        </div>
+                    <div class="result-description">
+                        ${video.description ? (video.description.length > 150 ? video.description.substring(0, 147) + '...' : video.description) : ''}
                     </div>
-                `;
-                
-                container.appendChild(resultItem);
+                </div>
+            `;
+            
+            container.appendChild(resultItem);
+        });
+    }
+
+    function setupDebugToggle() {
+        const toggleButton = document.getElementById('toggle-debug');
+        const debugInfo = document.getElementById('debug-info');
+        
+        if (toggleButton && debugInfo) {
+            toggleButton.addEventListener('click', function() {
+                const isVisible = debugInfo.style.display !== 'none';
+                debugInfo.style.display = isVisible ? 'none' : 'block';
+                toggleButton.textContent = isVisible ? 'Показать отладочную информацию' : 'Скрыть отладочную информацию';
             });
         }
-        
-        // Function to initialize lazy loading for thumbnails
-        function initializeLazyLoading() {
-            if ('IntersectionObserver' in window) {
-                const imageObserver = new IntersectionObserver((entries) => {
-                    entries.forEach(entry => {
-                        if (entry.isIntersecting) {
-                            const img = entry.target;
-                            const videoId = img.getAttribute('data-video-id');
-                            const userId = img.getAttribute('data-user-id');
-                            
-                            if (videoId && userId) {
-                                // Check if URL is in session storage
-                                const cachedUrl = sessionStorage.getItem(`thumbnail_${userId}__${videoId}`);
-                                
-                                if (cachedUrl) {
-                                    img.src = cachedUrl;
-                                    img.classList.remove('lazy-thumbnail', 'loading');
-                                    imageObserver.unobserve(img);
-                                } else {
-                                    // Mark as loading
-                                    img.classList.add('loading');
-                                    
-                                    // Fetch thumbnail URL
-                                    fetch(`/api/get-thumbnail-url/${userId}__${videoId}/`)
-                                        .then(response => response.json())
-                                        .then(data => {
-                                            if (data.success && data.url) {
-                                                // Cache URL
-                                                sessionStorage.setItem(`thumbnail_${userId}__${videoId}`, data.url);
-                                                
-                                                // Set image source
-                                                img.src = data.url;
-                                                img.classList.remove('lazy-thumbnail', 'loading');
-                                                
-                                                // Stop observing
-                                                imageObserver.unobserve(img);
-                                            }
-                                        })
-                                        .catch(error => {
-                                            console.error('Error loading thumbnail:', error);
-                                            img.classList.remove('loading');
-                                        });
-                                }
-                            }
-                        }
-                    });
-                }, {
-                    rootMargin: '200px 0px',
-                    threshold: 0.01
-                });
-                
-                // Observe all lazy thumbnails
-                document.querySelectorAll('.lazy-thumbnail').forEach(img => {
-                    imageObserver.observe(img);
-                });
-            }
-        }
-    });
+    }
 </script>
 {% endblock %}

@@ -1,0 +1,296 @@
+{% extends 'main/base.html' %}
+{% load static %}
+
+{% block title %}Отладка хранилища - KRONIK{% endblock %}
+
+{% block content %}
+<div class="debug-container">
+    <h1 class="debug-title">{{ debug_info.title }}</h1>
+    
+    <div class="debug-section">
+        <h2>Основная информация</h2>
+        <table class="debug-table">
+            <tr>
+                <th>Параметр</th>
+                <th>Значение</th>
+            </tr>
+            <tr>
+                <td>Название хранилища</td>
+                <td>{{ debug_info.storage_name }}</td>
+            </tr>
+            <tr>
+                <td>Статус подключения</td>
+                <td>
+                    <span class="status-indicator {% if 'Ошибка' in debug_info.connection_status %}status-error{% else %}status-ok{% endif %}">
+                        {{ debug_info.connection_status }}
+                    </span>
+                </td>
+            </tr>
+            <tr>
+                <td>Количество пользователей</td>
+                <td>{{ debug_info.user_count }}</td>
+            </tr>
+            <tr>
+                <td>Количество видео</td>
+                <td>{{ debug_info.video_count }}</td>
+            </tr>
+            <tr>
+                <td>Видео с "CORE" в названии</td>
+                <td>{{ debug_info.videos_with_core_count }}</td>
+            </tr>
+        </table>
+    </div>
+    
+    {% if debug_info.users %}
+    <div class="debug-section">
+        <h2>Пользователи ({{ debug_info.user_count }})</h2>
+        <div class="debug-content">
+            <ul class="debug-list">
+                {% for user in debug_info.users %}
+                <li>{{ user }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if debug_info.videos_with_core %}
+    <div class="debug-section">
+        <h2>Видео с "CORE" в названии ({{ debug_info.videos_with_core_count }})</h2>
+        <div class="debug-content">
+            <table class="debug-table">
+                <tr>
+                    <th>ID пользователя</th>
+                    <th>ID видео</th>
+                    <th>Название</th>
+                </tr>
+                {% for video in debug_info.videos_with_core %}
+                <tr>
+                    <td>{{ video.user_id }}</td>
+                    <td>{{ video.video_id }}</td>
+                    <td>{{ video.title }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if debug_info.videos %}
+    <div class="debug-section">
+        <h2>Образцы видео ({{ debug_info.videos|length }} из {{ debug_info.video_count }})</h2>
+        <div class="debug-content">
+            <table class="debug-table">
+                <tr>
+                    <th>ID пользователя</th>
+                    <th>ID видео</th>
+                    <th>Название</th>
+                    <th>Путь</th>
+                </tr>
+                {% for video in debug_info.videos %}
+                <tr>
+                    <td>{{ video.user_id }}</td>
+                    <td>{{ video.video_id }}</td>
+                    <td>{{ video.title }}</td>
+                    <td><code>{{ video.path }}</code></td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if debug_info.errors %}
+    <div class="debug-section error-section">
+        <h2>Ошибки ({{ debug_info.errors|length }})</h2>
+        <div class="debug-content">
+            <ul class="error-list">
+                {% for error in debug_info.errors %}
+                <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+            
+            {% if debug_info.traceback %}
+            <div class="traceback">
+                <h3>Traceback</h3>
+                <pre>{{ debug_info.traceback }}</pre>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+    
+    <div class="debug-actions">
+        <button class="debug-button" onclick="window.location.reload()">Обновить</button>
+        <button class="debug-button" onclick="window.location.href='/'">На главную</button>
+    </div>
+</div>
+
+<style>
+    .debug-container {
+        max-width: 1200px;
+        margin: 20px auto;
+        padding: 20px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        color: #333;
+    }
+    
+    .dark-theme .debug-container {
+        background-color: #1a1a1a;
+        color: #eee;
+    }
+    
+    .debug-title {
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid var(--primary-color);
+        color: var(--primary-color);
+    }
+    
+    .debug-section {
+        margin-bottom: 30px;
+        padding: 15px;
+        background-color: #fff;
+        border-radius: 5px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    
+    .dark-theme .debug-section {
+        background-color: #242424;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    }
+    
+    .debug-section h2 {
+        margin-top: 0;
+        margin-bottom: 15px;
+        font-size: 1.4rem;
+        color: var(--primary-color);
+    }
+    
+    .debug-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+    }
+    
+    .debug-table th,
+    .debug-table td {
+        padding: 10px;
+        text-align: left;
+        border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+    
+    .dark-theme .debug-table th,
+    .dark-theme .debug-table td {
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    .debug-table th {
+        background-color: rgba(159, 37, 88, 0.1);
+        font-weight: bold;
+    }
+    
+    .dark-theme .debug-table th {
+        background-color: rgba(159, 37, 88, 0.2);
+    }
+    
+    .debug-list {
+        margin: 0;
+        padding: 0 0 0 20px;
+    }
+    
+    .debug-list li {
+        margin-bottom: 8px;
+    }
+    
+    .error-section {
+        border-left: 4px solid #dc3545;
+    }
+    
+    .error-list li {
+        color: #dc3545;
+        margin-bottom: 10px;
+    }
+    
+    .dark-theme .error-list li {
+        color: #ff6b6b;
+    }
+    
+    .traceback {
+        margin-top: 20px;
+        padding: 15px;
+        background-color: #f8f9fa;
+        border-radius: 5px;
+        overflow-x: auto;
+    }
+    
+    .dark-theme .traceback {
+        background-color: #2a2a2a;
+    }
+    
+    .traceback pre {
+        margin: 0;
+        white-space: pre-wrap;
+        font-family: monospace;
+        font-size: 14px;
+        color: #dc3545;
+    }
+    
+    .dark-theme .traceback pre {
+        color: #ff6b6b;
+    }
+    
+    .status-indicator {
+        padding: 3px 8px;
+        border-radius: 3px;
+        font-weight: bold;
+    }
+    
+    .status-ok {
+        background-color: #28a745;
+        color: white;
+    }
+    
+    .status-error {
+        background-color: #dc3545;
+        color: white;
+    }
+    
+    .debug-actions {
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+        margin-top: 30px;
+    }
+    
+    .debug-button {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        background-color: var(--primary-color);
+        color: white;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    
+    .debug-button:hover {
+        background-color: #7d1e46;
+        transform: translateY(-3px);
+        box-shadow: 0 5px 15px rgba(159, 37, 88, 0.3);
+    }
+    
+    code {
+        font-family: monospace;
+        padding: 2px 5px;
+        background-color: #f0f0f0;
+        border-radius: 3px;
+        font-size: 0.9em;
+    }
+    
+    .dark-theme code {
+        background-color: #333;
+    }
+</style>
+{% endblock %}
