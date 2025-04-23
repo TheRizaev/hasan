@@ -8,6 +8,7 @@ from django.conf import settings
 urlpatterns = [
     path('', views.index, name='index'),  # Main page
     path('video/<str:video_id>/', views.video_detail, name='video_detail_gcs'),  # Video detail page
+    path('channel/<str:username>/', views.channel_view, name='channel'),  # Channel/Author page
     path('search/', views.search_results, name='search_results'),  # Search results page
     path('search-page/', views.search_page, name='search_page'),  # Google-like search page
     path('register/', views.register_view, name='register'),  # Registration page

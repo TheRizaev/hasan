@@ -1280,3 +1280,127 @@ def get_video_like_status(request, video_id):
     except Exception as e:
         logger.error(f"Error getting like status: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    
+def channel_view(request, username):
+    """
+    View for displaying a channel/author page
+    
+    Args:
+        request: HTTP request
+        username: The channel's username (with or without @ prefix)
+    """
+    try:
+        # Ensure username has @ prefix for GCS storage
+        if not username.startswith('@'):
+            username = '@' + username
+            
+        # Get channel profile information from GCS
+        from .gcs_storage import get_user_profile_from_gcs, list_user_videos
+        
+        # Get channel profile
+        channel = get_user_profile_from_gcs(username)
+        
+        if not channel:
+            messages.error(request, f'Канал {username} не найден')
+            return redirect('index')
+        
+        # Get channel videos with pagination
+        try:
+            offset = int(request.GET.get('offset', 0))
+        except (ValueError, TypeError):
+            offset = 0
+            
+        try:
+            limit = int(request.GET.get('limit', 20))
+        except (ValueError, TypeError):
+            limit = 20
+            
+        # Get videos for the channel
+        videos = []
+        total_videos = 0
+        
+        # Get the GCS bucket
+        from .gcs_storage import get_bucket, BUCKET_NAME, generate_video_url
+        bucket = get_bucket(BUCKET_NAME)
+        
+        if bucket:
+            # Get metadatafiles for the user
+            metadata_prefix = f"{username}/metadata/"
+            metadata_blobs = list(bucket.list_blobs(prefix=metadata_prefix))
+            
+            # Process metadata files
+            for blob in metadata_blobs:
+                if blob.name.endswith('.json'):
+                    try:
+                        import json
+                        from datetime import datetime
+                        
+                        # Get video metadata
+                        metadata = json.loads(blob.download_as_text())
+                        
+                        # Add user information
+                        metadata['user_id'] = username
+                        metadata['display_name'] = channel.get('display_name', username.replace('@', ''))
+                        
+                        # Format views
+                        views = metadata.get('views', 0)
+                        if isinstance(views, (int, str)) and str(views).isdigit():
+                            views = int(views)
+                            metadata['views_formatted'] = f"{views // 1000}K просмотров" if views >= 1000 else f"{views} просмотров"
+                        else:
+                            metadata['views_formatted'] = "0 просмотров"
+                        
+                        # Format upload date
+                        upload_date = metadata.get('upload_date', '')
+                        if upload_date:
+                            try:
+                                upload_datetime = datetime.fromisoformat(upload_date)
+                                metadata['upload_date_formatted'] = upload_datetime.strftime("%d.%m.%Y")
+                            except Exception:
+                                metadata['upload_date_formatted'] = upload_date[:10] if upload_date else "Недавно"
+                        else:
+                            metadata['upload_date_formatted'] = "Недавно"
+                        
+                        # Add thumbnail URL
+                        if 'thumbnail_path' in metadata:
+                            metadata['thumbnail_url'] = generate_video_url(
+                                username, 
+                                metadata['video_id'], 
+                                file_path=metadata['thumbnail_path'], 
+                                expiration_time=3600
+                            )
+                        
+                        videos.append(metadata)
+                    except Exception as e:
+                        logger.error(f"Error processing metadata for {blob.name}: {e}")
+            
+            # Sort videos by upload date (newest first)
+            videos.sort(key=lambda x: x.get('upload_date', ''), reverse=True)
+            total_videos = len(videos)
+            
+            # Apply pagination
+            videos = videos[offset:offset + limit]
+        
+        # Add channel statistics if not present
+        if 'stats' not in channel:
+            channel['stats'] = {
+                'videos_count': total_videos,
+                'subscribers': 0  # Placeholder since we don't have real subscriber data
+            }
+        else:
+            # Update videos count
+            channel['stats']['videos_count'] = total_videos
+        
+        return render(request, 'main/channel.html', {
+            'channel': channel,
+            'videos': videos,
+            'total_videos': total_videos
+        })
+        
+    except Exception as e:
+        import traceback
+        logger.error(f"Error in channel view: {e}")
+        logger.error(traceback.format_exc())
+        
+        messages.error(request, f'Ошибка при загрузке информации о канале: {e}')
+        return redirect('index')
