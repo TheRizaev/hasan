@@ -39,7 +39,16 @@
             </div>
             <div class="video-info">
                 <div class="video-title">{{ video.title }}</div>
-                <div class="channel-name">{{ video.display_name|default:video.channel }}</div>
+                <div class="channel-info">
+                    <a href="{% url 'channel' username=video.user_id %}" class="channel-avatar-small">
+                        {% if video.avatar_url %}
+                            <img src="{{ video.avatar_url }}" alt="{{ video.display_name|default:video.channel }}">
+                        {% else %}
+                            <span class="avatar-text">{{ video.display_name|first|default:video.channel|first }}</span>
+                        {% endif %}
+                    </a>
+                    <a href="{% url 'channel' username=video.user_id %}" class="channel-name">{{ video.display_name|default:video.channel }}</a>
+                </div>
                 <div class="video-stats">
                     <span>{{ video.views|format_views }} просмотров</span>
                     <span>• {{ video.upload_date_formatted|default:"Недавно" }}</span>
@@ -50,6 +59,116 @@
     {% endif %}
 </div>
 
+{% endblock %}
+<style>
+/* Enhanced channel info styles */
+.channel-info {
+    display: flex;
+    align-items: center;
+    margin: 8px 0;
+}
+
+.channel-avatar-small {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    margin-right: 8px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(159, 37, 88, 0.1);
+    flex-shrink: 0;
+}
+
+.channel-avatar-small img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.channel-avatar-small .avatar-text {
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+.channel-name {
+    font-size: 14px;
+    color: rgba(159, 37, 88, 0.7) !important; /* Soft pink color for author name */
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s;
+}
+
+.dark-theme .channel-name {
+    color: rgba(255, 176, 201, 0.9) !important; /* Lighter pink for dark theme */
+}
+
+.channel-name:hover {
+    color: var(--primary-color) !important;
+    text-decoration: underline;
+}
+
+/* Enhanced video card styles */
+.videos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 25px;
+    margin-top: 20px;
+}
+
+.video-card {
+    cursor: pointer;
+    transition: transform 0.3s, box-shadow 0.3s;
+    border-radius: 12px;
+    overflow: hidden;
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.video-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+}
+
+.dark-theme .video-card:hover {
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+}
+
+.thumbnail {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    background-color: #111;
+}
+
+.thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s;
+}
+
+.video-card:hover .thumbnail img {
+    transform: scale(1.05);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .videos-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+}
+
+@media (min-width: 769px) and (max-width: 1100px) {
+    .videos-grid {
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    }
+}
+</style>
+{% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Инициализация ленивой загрузки миниатюр для видео без URL миниатюр

@@ -1,0 +1,562 @@
+{% extends 'main/base.html' %}
+{% load static %}
+{% load humanize %}
+{% load format_views %}
+
+{% block title %}{{ channel.display_name|default:channel.user_id }} - KRONIK{% endblock %}
+
+{% block content %}
+<div class="channel-page">
+    <!-- Channel Banner -->
+    <div class="channel-banner">
+        {% if channel.banner_url %}
+            <img src="{{ channel.banner_url }}" alt="{{ channel.display_name }} banner">
+        {% else %}
+            <div class="default-banner"></div>
+        {% endif %}
+    </div>
+    
+    <!-- Channel Information -->
+    <div class="channel-header">
+        <div class="channel-header-content">
+            <div class="channel-avatar-large">
+                {% if channel.avatar_url %}
+                    <img src="{{ channel.avatar_url }}" alt="{{ channel.display_name }}">
+                {% else %}
+                    <span class="avatar-text">{{ channel.display_name|first|default:channel.user_id|first }}</span>
+                {% endif %}
+            </div>
+            
+            <div class="channel-details">
+                <h1 class="channel-title">{{ channel.display_name|default:channel.user_id }}</h1>
+                <div class="channel-stats">
+                    <span class="channel-username">{{ channel.user_id }}</span>
+                    <span class="channel-subscribers">{{ channel.stats.subscribers|default:"0" }} подписчиков</span>
+                    <span class="channel-videos-count">{{ channel.stats.videos_count|default:"0" }} видео</span>
+                </div>
+                {% if channel.bio %}
+                <div class="channel-description">
+                    {{ channel.bio }}
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="channel-actions">
+                {% if user.is_authenticated and user.username != channel.user_id %}
+                <button class="subscribe-button">Подписаться</button>
+                {% elif user.is_authenticated and user.username == channel.user_id %}
+                <button class="edit-channel-button" onclick="window.location.href='{% url 'profile_settings' %}'">Настройки канала</button>
+                {% else %}
+                <button class="subscribe-button" onclick="window.location.href='{% url 'login' %}'">Подписаться</button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Channel Navigation -->
+    <div class="channel-navigation">
+        <div class="channel-navigation-item active">Видео</div>
+        <div class="channel-navigation-item">Плейлисты</div>
+        <div class="channel-navigation-item">О канале</div>
+    </div>
+    
+    <!-- Channel Content - Videos -->
+    <div class="channel-content">
+        <h2 class="section-title">Видео <span class="video-count">({{ channel.stats.videos_count|default:"0" }})</span></h2>
+        
+        <!-- Videos Grid -->
+        <div class="videos-grid">
+            {% if videos %}
+                {% for video in videos %}
+                <div class="video-card" onclick="window.location.href='/video/{{ video.user_id }}__{{ video.video_id }}/'">
+                    <div class="thumbnail">
+                        {% if video.thumbnail_url %}
+                            <img src="{{ video.thumbnail_url }}" alt="{{ video.title }}" loading="lazy" onerror="this.src='{% static 'placeholder.jpg' %}'">
+                        {% else %}
+                            <img src="{% static 'placeholder.jpg' %}" alt="{{ video.title }}" loading="lazy">
+                        {% endif %}
+                        <div class="duration">{{ video.duration|default:"00:00" }}</div>
+                    </div>
+                    <div class="video-info">
+                        <div class="video-title">{{ video.title }}</div>
+                        <div class="video-stats">
+                            <span>{{ video.views|format_views }} просмотров</span>
+                            <span>• {{ video.upload_date_formatted|default:"Недавно" }}</span>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="no-videos">
+                    <img src="{% static 'icons/camera.svg' %}" alt="No videos" class="no-videos-icon">
+                    <h3>Нет загруженных видео</h3>
+                    <p>Автор пока не загрузил ни одного видео на платформу</p>
+                    {% if user.is_authenticated and user.username == channel.user_id %}
+                    <button class="upload-button" onclick="window.location.href='{% url 'studio' %}'">Загрузить видео</button>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+        
+        {% if videos|length >= 20 %}
+        <div class="load-more-container">
+            <button id="load-more-btn" class="load-more-button">Загрузить ещё</button>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+/* Channel page styles */
+.channel-page {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* Banner styles */
+.channel-banner {
+    width: 100%;
+    height: 200px;
+    overflow: hidden;
+    position: relative;
+    border-radius: 12px 12px 0 0;
+    margin-bottom: -50px;
+}
+
+.channel-banner img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.default-banner {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, rgba(159, 37, 88, 0.8), rgba(159, 37, 88, 0.4));
+    position: relative;
+    overflow: hidden;
+}
+
+.default-banner::before,
+.default-banner::after {
+    content: "";
+    position: absolute;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+}
+
+.default-banner::before {
+    width: 300px;
+    height: 300px;
+    top: -150px;
+    left: -50px;
+}
+
+.default-banner::after {
+    width: 200px;
+    height: 200px;
+    bottom: -80px;
+    right: 100px;
+}
+
+/* Channel header styles */
+.channel-header {
+    background-color: rgba(255, 255, 255, 0.7);
+    border-radius: 0 0 12px 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.dark-theme .channel-header {
+    background-color: rgba(7, 24, 31, 0.7);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+.channel-header-content {
+    display: flex;
+    align-items: flex-start;
+    position: relative;
+}
+
+.channel-avatar-large {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    border: 4px solid rgba(255, 255, 255, 0.9);
+    margin-right: 20px;
+    background-color: var(--primary-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
+    position: relative;
+    top: -30px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.dark-theme .channel-avatar-large {
+    border-color: rgba(7, 24, 31, 0.9);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+.channel-avatar-large img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.channel-avatar-large .avatar-text {
+    font-size: 40px;
+    font-weight: bold;
+    color: white;
+}
+
+.channel-details {
+    flex-grow: 1;
+}
+
+.channel-title {
+    font-size: 24px;
+    font-weight: bold;
+    margin: 0 0 10px 0;
+    color: var(--primary-color);
+}
+
+.channel-stats {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 10px;
+    color: var(--gray-color);
+    font-size: 14px;
+}
+
+.channel-description {
+    color: var(--text-dark);
+    margin-top: 15px;
+    font-size: 15px;
+    line-height: 1.5;
+    max-width: 80%;
+}
+
+.dark-theme .channel-description {
+    color: var(--text-light);
+}
+
+.channel-actions {
+    margin-left: auto;
+}
+
+.subscribe-button,
+.edit-channel-button {
+    padding: 10px 20px;
+    border-radius: 30px;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.subscribe-button {
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    box-shadow: 0 5px 15px rgba(159, 37, 88, 0.3);
+}
+
+.subscribe-button:hover {
+    background-color: #7d1e46;
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(159, 37, 88, 0.4);
+}
+
+.edit-channel-button {
+    background-color: transparent;
+    color: var(--primary-color);
+    border: 2px solid var(--primary-color);
+}
+
+.edit-channel-button:hover {
+    background-color: rgba(159, 37, 88, 0.1);
+    transform: translateY(-3px);
+}
+
+/* Channel navigation styles */
+.channel-navigation {
+    display: flex;
+    border-bottom: 1px solid rgba(159, 37, 88, 0.2);
+    margin-bottom: 30px;
+}
+
+.channel-navigation-item {
+    padding: 15px 20px;
+    font-weight: bold;
+    color: var(--gray-color);
+    cursor: pointer;
+    position: relative;
+    transition: color 0.3s;
+}
+
+.channel-navigation-item:hover {
+    color: var(--primary-color);
+}
+
+.channel-navigation-item.active {
+    color: var(--primary-color);
+}
+
+.channel-navigation-item.active::after {
+    content: "";
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background-color: var(--primary-color);
+    border-radius: 3px 3px 0 0;
+}
+
+/* Channel content styles */
+.channel-content {
+    padding: 20px 0;
+}
+
+.section-title {
+    font-size: 20px;
+    font-weight: bold;
+    margin-bottom: 20px;
+    color: var(--primary-color);
+}
+
+.video-count {
+    font-weight: normal;
+    color: var(--gray-color);
+    font-size: 16px;
+}
+
+/* No videos message */
+.no-videos {
+    text-align: center;
+    padding: 50px 20px;
+    background-color: rgba(159, 37, 88, 0.05);
+    border-radius: 12px;
+    margin: 20px 0;
+}
+
+.no-videos-icon {
+    width: 64px;
+    height: 64px;
+    opacity: 0.5;
+    margin-bottom: 15px;
+}
+
+.no-videos h3 {
+    margin-bottom: 10px;
+    color: var(--primary-color);
+}
+
+.no-videos p {
+    color: var(--gray-color);
+    margin-bottom: 20px;
+}
+
+.upload-button {
+    padding: 10px 20px;
+    border-radius: 30px;
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 5px 15px rgba(159, 37, 88, 0.3);
+}
+
+.upload-button:hover {
+    background-color: #7d1e46;
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(159, 37, 88, 0.4);
+}
+
+.load-more-container {
+    display: flex;
+    justify-content: center;
+    margin: 30px 0;
+}
+
+.load-more-button {
+    padding: 10px 25px;
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 30px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.load-more-button:hover {
+    background-color: #7d1e46;
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(159, 37, 88, 0.3);
+}
+
+/* Responsive adaptations */
+@media (max-width: 768px) {
+    .channel-header-content {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+    
+    .channel-avatar-large {
+        margin-right: 0;
+        top: -50px;
+        margin-bottom: -30px;
+    }
+    
+    .channel-details {
+        margin-bottom: 20px;
+    }
+    
+    .channel-description {
+        max-width: 100%;
+    }
+    
+    .channel-stats {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .channel-navigation {
+        overflow-x: auto;
+        white-space: nowrap;
+        padding-bottom: 5px;
+    }
+    
+    .channel-navigation-item {
+        padding: 15px 15px;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle navigation tabs
+    const navItems = document.querySelectorAll('.channel-navigation-item');
+    
+    navItems.forEach(item => {
+        item.addEventListener('click', function() {
+            // Remove active class from all items
+            navItems.forEach(i => i.classList.remove('active'));
+            
+            // Add active class to clicked item
+            this.classList.add('active');
+            
+            // Show relevant content based on selected tab
+            const selectedTab = this.textContent.trim();
+            
+            // This is a simplified version - in a real implementation,
+            // you would show/hide different content sections
+            console.log(`Selected tab: ${selectedTab}`);
+        });
+    });
+    
+    // Handle load more button
+    const loadMoreBtn = document.getElementById('load-more-btn');
+    if (loadMoreBtn) {
+        let currentOffset = {{ videos|length|default:"0" }};
+        const channelId = "{{ channel.user_id }}";
+        
+        loadMoreBtn.addEventListener('click', function() {
+            this.textContent = 'Загрузка...';
+            this.disabled = true;
+            
+            // Make API request to load more videos
+            fetch(`/api/list-user-videos/${channelId}/?offset=${currentOffset}&limit=20`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.videos && data.videos.length > 0) {
+                        // Append videos to grid
+                        appendVideos(data.videos);
+                        
+                        // Update offset
+                        currentOffset += data.videos.length;
+                        
+                        // Hide button if no more videos
+                        if (currentOffset >= data.total) {
+                            loadMoreBtn.style.display = 'none';
+                        } else {
+                            loadMoreBtn.textContent = 'Загрузить ещё';
+                            loadMoreBtn.disabled = false;
+                        }
+                    } else {
+                        // No more videos or error
+                        loadMoreBtn.style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading more videos:', error);
+                    loadMoreBtn.textContent = 'Повторить';
+                    loadMoreBtn.disabled = false;
+                });
+        });
+    }
+    
+    // Function to append videos to the grid
+    function appendVideos(videos) {
+        const grid = document.querySelector('.videos-grid');
+        
+        videos.forEach(video => {
+            const card = document.createElement('div');
+            card.className = 'video-card';
+            card.onclick = function() {
+                window.location.href = `/video/${video.user_id}__${video.video_id}/`;
+            };
+            
+            // Determine thumbnail URL
+            const thumbnailUrl = video.thumbnail_url || '/static/placeholder.jpg';
+            
+            card.innerHTML = `
+                <div class="thumbnail">
+                    <img src="${thumbnailUrl}" alt="${video.title}" loading="lazy" onerror="this.src='/static/placeholder.jpg'">
+                    <div class="duration">${video.duration || '00:00'}</div>
+                </div>
+                <div class="video-info">
+                    <div class="video-title">${video.title}</div>
+                    <div class="video-stats">
+                        <span>${video.views_formatted || '0 просмотров'}</span>
+                        <span>• ${video.upload_date_formatted || 'Недавно'}</span>
+                    </div>
+                </div>
+            `;
+            
+            grid.appendChild(card);
+        });
+    }
+    
+    // Handle subscribe button
+    const subscribeBtn = document.querySelector('.subscribe-button');
+    if (subscribeBtn && !subscribeBtn.getAttribute('onclick')) {
+        subscribeBtn.addEventListener('click', function() {
+            // Toggle subscription state
+            const isSubscribed = this.classList.contains('subscribed');
+            
+            if (isSubscribed) {
+                this.classList.remove('subscribed');
+                this.textContent = 'Подписаться';
+                this.style.backgroundColor = '';
+            } else {
+                this.classList.add('subscribed');
+                this.textContent = 'Вы подписаны';
+                this.style.backgroundColor = '#333';
+            }
+            
+            // In a real implementation, you would send an API request here
+            console.log(`Subscription ${isSubscribed ? 'removed' : 'added'}`);
+        });
+    }
+});
+</script>
+{% endblock %}

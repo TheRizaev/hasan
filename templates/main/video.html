@@ -163,15 +163,15 @@
             </div>
             
             <div class="channel-info">
-                <div class="channel-avatar">
+                <a href="{% url 'channel' username=video.user_id %}" class="channel-avatar">
                     {% if video.avatar_url %}
                         <img src="{{ video.avatar_url }}" alt="{{ video.display_name|default:video.channel }}">
                     {% else %}
                         {{ video.display_name|default:video.channel|first }}
                     {% endif %}
-                </div>
+                </a>
                 <div class="channel-details">
-                    <div class="channel-name">{{ video.display_name|default:video.channel }}</div>
+                    <a href="{% url 'channel' username=video.user_id %}" class="channel-name">{{ video.display_name|default:video.channel }}</a>
                     <div class="subscribers">{{ video.subscribers|default:"0" }} подписчиков</div>
                 </div>
                 <button class="subscribe-button">Подписаться</button>
@@ -342,6 +342,91 @@
     filter: brightness(0) invert(1);
 }
 
+/* Enhanced channel info styling */
+.channel-info {
+    display: flex;
+    align-items: center;
+    padding: 15px 0;
+    border-top: 1px solid rgba(159, 37, 88, 0.1);
+    border-bottom: 1px solid rgba(159, 37, 88, 0.1);
+    margin: 15px 0;
+}
+
+.channel-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    overflow: hidden;
+    margin-right: 15px;
+    background-color: var(--accent-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: 20px;
+    flex-shrink: 0;
+    text-decoration: none;
+    transition: transform 0.3s;
+}
+
+.channel-avatar:hover {
+    transform: scale(1.05);
+}
+
+.channel-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.channel-details {
+    flex-grow: 1;
+}
+
+.channel-details .channel-name {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: rgba(159, 37, 88, 0.8);
+    text-decoration: none;
+    transition: color 0.3s;
+}
+
+.dark-theme .channel-details .channel-name {
+    color: rgba(255, 176, 201, 0.9);
+}
+
+.channel-details .channel-name:hover {
+    color: var(--primary-color);
+    text-decoration: underline;
+}
+
+.subscribers {
+    font-size: 14px;
+    color: var(--gray-color);
+}
+
+.subscribe-button {
+    padding: 10px 20px;
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 30px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.subscribe-button:hover {
+    background-color: #7d1e46;
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(159, 37, 88, 0.3);
+}
+
+.subscribe-button.subscribed {
+    background-color: #333;
+}
 /* Login prompt */
 .login-prompt {
     position: fixed;
@@ -665,6 +750,55 @@
                 }
             })
             .catch(error => console.error('Error tracking view:', error));
+        }
+
+        const subscribeButton = document.querySelector('.subscribe-button');
+        if (subscribeButton) {
+            // Check if user is already subscribed (in a real app, this would be from the server)
+            let isSubscribed = false;
+            
+            // Handle subscribe button click
+            subscribeButton.addEventListener('click', function() {
+                // If not authenticated, show login prompt
+                {% if not user.is_authenticated %}
+                showLoginPrompt();
+                return;
+                {% endif %}
+                
+                // Toggle subscription state
+                isSubscribed = !isSubscribed;
+                
+                if (isSubscribed) {
+                    this.textContent = 'Вы подписаны';
+                    this.classList.add('subscribed');
+                    // Add subscription animation
+                    this.animate([
+                        { transform: 'scale(0.9)', backgroundColor: 'var(--accent-color)' },
+                        { transform: 'scale(1.1)', backgroundColor: '#333' },
+                        { transform: 'scale(1)', backgroundColor: '#333' }
+                    ], {
+                        duration: 300,
+                        easing: 'ease-out',
+                        fill: 'forwards'
+                    });
+                } else {
+                    this.textContent = 'Подписаться';
+                    this.classList.remove('subscribed');
+                    // Add unsubscribe animation
+                    this.animate([
+                        { transform: 'scale(0.9)', backgroundColor: '#333' },
+                        { transform: 'scale(1.1)', backgroundColor: 'var(--accent-color)' },
+                        { transform: 'scale(1)', backgroundColor: 'var(--accent-color)' }
+                    ], {
+                        duration: 300,
+                        easing: 'ease-out',
+                        fill: 'forwards'
+                    });
+                }
+                
+                // In a real implementation, you would send this to the server
+                console.log(`User ${isSubscribed ? 'subscribed to' : 'unsubscribed from'} channel ${video.user_id}`);
+            });
         }
 
         // Отслеживание времени просмотра
