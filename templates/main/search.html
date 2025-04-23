@@ -1,6 +1,6 @@
 {% extends 'main/base.html' %}
 {% load static %}
-
+{% load custom_filters %}
 {% block title %}{{ query }} - Результаты поиска - KRONIK{% endblock %}
 
 {% block content %}
@@ -15,7 +15,25 @@
     </div>
     
     <div class="search-results-list" id="search-results-container">
-        {% if videos %}
+        {% if is_loading %}
+            <!-- Placeholders for fast initial loading -->
+            {% for i in placeholder_count|get_range %}
+            <div class="search-result-item placeholder-card placeholder-animate" data-type="videos">
+                <div class="result-thumbnail placeholder-thumbnail">
+                    <div class="placeholder-thumbnail-inner"></div>
+                </div>
+                <div class="result-details">
+                    <h3 class="result-title placeholder-title"></h3>
+                    <div class="result-meta placeholder-meta"></div>
+                    <div class="result-channel">
+                        <div class="channel-avatar placeholder-avatar"></div>
+                        <div class="channel-name placeholder-channel"></div>
+                    </div>
+                    <div class="result-description placeholder-description"></div>
+                </div>
+            </div>
+            {% endfor %}
+        {% elif videos %}
             {% for video in videos %}
             <div class="search-result-item" data-type="videos" onclick="window.location.href = '/video/{{ video.user_id }}__{{ video.video_id }}/'">
                 <div class="result-thumbnail">
@@ -30,7 +48,11 @@
                     <h3 class="result-title">{{ video.title }}</h3>
                     <div class="result-meta">{{ video.views_formatted|default:"0 просмотров" }} • {{ video.upload_date_formatted|default:"Недавно" }}</div>
                     <div class="result-channel">
-                        <div class="channel-avatar">{{ video.display_name|first|default:video.channel|first }}</div>
+                        {% if video.avatar_url %}
+                            <div class="channel-avatar"><img src="{{ video.avatar_url }}" alt="{{ video.display_name }}" loading="lazy"></div>
+                        {% else %}
+                            <div class="channel-avatar">{{ video.display_name|first|default:video.channel|first }}</div>
+                        {% endif %}
                         <div class="channel-name">{{ video.display_name|default:video.channel }}</div>
                     </div>
                     <div class="result-description">
@@ -161,6 +183,92 @@
 
 <style>
     /* Additional styles for search results page */
+    /* Placeholder styles for fast loading */
+    .placeholder-thumbnail {
+        background-color: rgba(159, 37, 88, 0.1);
+    }
+    
+    .dark-theme .placeholder-thumbnail {
+        background-color: rgba(159, 37, 88, 0.2);
+    }
+    
+    .placeholder-thumbnail-inner {
+        width: 100%;
+        height: 100%;
+    }
+    
+    .placeholder-title {
+        height: 24px;
+        width: 80%;
+        background-color: rgba(159, 37, 88, 0.1);
+        margin-bottom: 10px;
+    }
+    
+    .dark-theme .placeholder-title {
+        background-color: rgba(159, 37, 88, 0.2);
+    }
+    
+    .placeholder-meta {
+        height: 16px;
+        width: 60%;
+        background-color: rgba(159, 37, 88, 0.1);
+        margin-bottom: 10px;
+    }
+    
+    .dark-theme .placeholder-meta {
+        background-color: rgba(159, 37, 88, 0.2);
+    }
+    
+    .placeholder-avatar {
+        background-color: rgba(159, 37, 88, 0.1);
+    }
+    
+    .dark-theme .placeholder-avatar {
+        background-color: rgba(159, 37, 88, 0.2);
+    }
+    
+    .placeholder-channel {
+        height: 16px;
+        width: 40%;
+        background-color: rgba(159, 37, 88, 0.1);
+    }
+    
+    .dark-theme .placeholder-channel {
+        background-color: rgba(159, 37, 88, 0.2);
+    }
+    
+    .placeholder-description {
+        height: 32px;
+        width: 100%;
+        background-color: rgba(159, 37, 88, 0.1);
+    }
+    
+    .dark-theme .placeholder-description {
+        background-color: rgba(159, 37, 88, 0.2);
+    }
+    
+    /* Channel avatar with image */
+    .result-channel .channel-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        margin-right: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+        background-color: var(--primary-color);
+        overflow: hidden;
+    }
+    
+    .result-channel .channel-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    /* Search suggestions */
     .search-suggestions {
         margin-top: 20px;
         padding: 15px;
@@ -216,192 +324,198 @@
         box-shadow: 0 5px 15px rgba(159, 37, 88, 0.3);
     }
     
-    /* Fix for lazy loaded thumbnails */
-    .lazy-thumbnail {
-        transition: opacity 0.3s;
+    /* Placeholder animation */
+    @keyframes shimmer {
+        0% {
+            transform: translateX(-100%);
+        }
+        100% {
+            transform: translateX(100%);
+        }
     }
     
-    .lazy-thumbnail.loading {
-        opacity: 0.5;
+    .placeholder-animate::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        transform: translateX(-100%);
+        background-image: linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0) 0,
+            rgba(255, 255, 255, 0.2) 20%,
+            rgba(255, 255, 255, 0.5) 60%,
+            rgba(255, 255, 255, 0)
+        );
+        animation: shimmer 2s infinite;
     }
     
-    /* Debug info styles */
-    .debug-toggle-container {
-        display: flex;
-        justify-content: center;
-        margin: 30px 0 10px;
-    }
-    
-    .debug-toggle {
-        background-color: #444;
-        color: white;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 14px;
-        transition: all 0.3s;
-    }
-    
-    .debug-toggle:hover {
-        background-color: #666;
-    }
-    
-    .debug-info {
-        margin: 20px 0;
-        padding: 20px;
-        background-color: #f5f5f5;
-        border-radius: 8px;
-        border: 1px solid #ddd;
-        font-family: monospace;
-        font-size: 14px;
-    }
-    
-    .dark-theme .debug-info {
-        background-color: #222;
-        border-color: #444;
-        color: #ddd;
-    }
-    
-    .debug-section {
-        margin-bottom: 20px;
-        border-bottom: 1px solid #ddd;
-        padding-bottom: 10px;
-    }
-    
-    .dark-theme .debug-section {
-        border-color: #444;
-    }
-    
-    .debug-section h4 {
-        background-color: #eee;
-        padding: 8px 12px;
-        margin: 10px 0;
-        border-radius: 4px;
-        color: #333;
-    }
-    
-    .dark-theme .debug-section h4 {
-        background-color: #333;
-        color: #fff;
-    }
-    
-    .debug-content {
-        padding: 0 12px;
-    }
-    
-    .debug-info .error {
-        color: #e74c3c;
-    }
-    
-    .debug-traceback {
-        margin-top: 10px;
-        padding: 10px;
-        background-color: #eee;
-        border-radius: 4px;
-        overflow-x: auto;
-    }
-    
-    .dark-theme .debug-traceback {
-        background-color: #333;
-    }
-    
-    .debug-traceback pre {
-        margin: 0;
-        white-space: pre-wrap;
-        word-wrap: break-word;
+    .dark-theme .placeholder-animate::after {
+        background-image: linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0) 0,
+            rgba(255, 255, 255, 0.1) 20%,
+            rgba(255, 255, 255, 0.2) 60%,
+            rgba(255, 255, 255, 0)
+        );
     }
 </style>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Инициализация ленивой загрузки для миниатюр
-        initializeLazyLoading();
+        const searchResultsContainer = document.getElementById('search-results-container');
+        const loadMoreBtn = document.getElementById('load-more-btn');
+        const query = "{{ query }}";
+        let currentOffset = {{ videos|length|default:"0" }};
+        let isLoading = false;
         
-        // Настройка фильтров
-        setupFilters();
+        // If we have placeholders, load actual results immediately
+        {% if is_loading %}
+        fetchSearchResults(0, {{ placeholder_count|default:"6" }});
+        {% endif %}
         
-        // Настройка кнопки "Загрузить еще"
-        setupLoadMore();
-
-        setupDebugToggle();
-    });
-    
-    // Ленивая загрузка миниатюр
-    function initializeLazyLoading() {
-        if ('IntersectionObserver' in window) {
-            const imageObserver = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        const img = entry.target;
-                        const videoId = img.getAttribute('data-video-id');
-                        const userId = img.getAttribute('data-user-id');
-                        
-                        if (videoId && userId) {
-                            // Проверяем наличие URL в sessionStorage
-                            const cachedUrl = sessionStorage.getItem(`thumbnail_${userId}__${videoId}`);
-                            
-                            if (cachedUrl) {
-                                img.src = cachedUrl;
-                                img.classList.remove('lazy-thumbnail', 'loading');
-                                imageObserver.unobserve(img);
-                            } else {
-                                // Отмечаем как загружаемый
-                                img.classList.add('loading');
-                                
-                                // Запрашиваем URL миниатюры
-                                fetch(`/api/get-thumbnail-url/${userId}__${videoId}/`)
-                                    .then(response => response.json())
-                                    .then(data => {
-                                        if (data.success && data.url) {
-                                            // Кэшируем URL
-                                            sessionStorage.setItem(`thumbnail_${userId}__${videoId}`, data.url);
-                                            
-                                            // Устанавливаем источник изображения
-                                            img.src = data.url;
-                                            img.classList.remove('lazy-thumbnail', 'loading');
-                                            
-                                            // Прекращаем наблюдение
-                                            imageObserver.unobserve(img);
-                                        }
-                                    })
-                                    .catch(error => {
-                                        console.error('Ошибка загрузки миниатюры:', error);
-                                        img.classList.remove('loading');
-                                    });
-                            }
-                        }
-                    }
-                });
-            }, {
-                rootMargin: '200px 0px',
-                threshold: 0.01
-            });
-            
-            // Наблюдаем за всеми ленивыми миниатюрами
-            document.querySelectorAll('.lazy-thumbnail').forEach(img => {
-                imageObserver.observe(img);
+        // Set up load more button
+        if (loadMoreBtn) {
+            loadMoreBtn.addEventListener('click', function() {
+                if (!isLoading) {
+                    fetchSearchResults(currentOffset, 10);
+                }
             });
         }
-    }
-    
-    // Настройка фильтров
-    function setupFilters() {
-        const filterItems = document.querySelectorAll('.filter-item');
-        const resultItems = document.querySelectorAll('.search-result-item');
         
+        // Function to fetch search results via AJAX
+        function fetchSearchResults(offset, limit) {
+            if (isLoading) return;
+            
+            isLoading = true;
+            if (loadMoreBtn) {
+                loadMoreBtn.textContent = 'Загрузка...';
+                loadMoreBtn.disabled = true;
+            }
+            
+            // Make AJAX request
+            fetch(`/search?query=${encodeURIComponent(query)}&offset=${offset}&limit=${limit}&format=json`)
+                .then(response => response.json())
+                .then(data => {
+                    // If this is the first load, replace placeholders
+                    if (offset === 0 && document.querySelector('.placeholder-card')) {
+                        searchResultsContainer.innerHTML = '';
+                    }
+                    
+                    if (data.success && data.videos && data.videos.length > 0) {
+                        // Append videos to container
+                        appendSearchResults(data.videos);
+                        
+                        // Update offset
+                        currentOffset += data.videos.length;
+                        
+                        // Update load more button
+                        if (loadMoreBtn) {
+                            if (currentOffset >= data.total) {
+                                loadMoreBtn.style.display = 'none';
+                            } else {
+                                loadMoreBtn.textContent = 'Загрузить ещё';
+                                loadMoreBtn.disabled = false;
+                            }
+                        }
+                    } else {
+                        // No more results
+                        if (offset === 0) {
+                            // First load with no results
+                            searchResultsContainer.innerHTML = `
+                                <div class="no-results">
+                                    <h3>По запросу "${query}" ничего не найдено</h3>
+                                    <p>Попробуйте изменить запрос или выбрать другую категорию</p>
+                                    <div class="search-suggestions">
+                                        <h4>Возможно, вас заинтересует:</h4>
+                                        <div class="suggestion-tags">
+                                            <a href="/search?query=программирование" class="suggestion-tag">программирование</a>
+                                            <a href="/search?query=математика" class="suggestion-tag">математика</a>
+                                            <a href="/search?query=физика" class="suggestion-tag">физика</a>
+                                            <a href="/search?query=история" class="suggestion-tag">история</a>
+                                            <a href="/search?query=CORE" class="suggestion-tag">CORE</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                        
+                        if (loadMoreBtn) {
+                            loadMoreBtn.style.display = 'none';
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Search error:', error);
+                    if (loadMoreBtn) {
+                        loadMoreBtn.textContent = 'Ошибка загрузки';
+                        setTimeout(() => {
+                            loadMoreBtn.textContent = 'Повторить';
+                            loadMoreBtn.disabled = false;
+                        }, 2000);
+                    }
+                })
+                .finally(() => {
+                    isLoading = false;
+                });
+        }
+        
+        // Function to append search results to container
+        function appendSearchResults(videos) {
+            videos.forEach(video => {
+                const resultItem = document.createElement('div');
+                resultItem.className = 'search-result-item';
+                resultItem.setAttribute('data-type', 'videos');
+                resultItem.onclick = function() {
+                    window.location.href = `/video/${video.user_id}__${video.video_id}/`;
+                };
+                
+                // Thumbnail with fallback
+                const thumbnailUrl = video.thumbnail_url || '/static/placeholder.jpg';
+                // Avatar with fallback to first letter
+                const avatarContent = video.avatar_url ? 
+                    `<img src="${video.avatar_url}" alt="${video.display_name}" loading="lazy">` : 
+                    `${video.display_name ? video.display_name.charAt(0) : ''}`;
+                
+                resultItem.innerHTML = `
+                    <div class="result-thumbnail">
+                        <img src="${thumbnailUrl}" alt="${video.title}" loading="lazy" onerror="this.src='/static/placeholder.jpg'">
+                        <div class="result-duration">${video.duration || '00:00'}</div>
+                    </div>
+                    <div class="result-details">
+                        <h3 class="result-title">${video.title}</h3>
+                        <div class="result-meta">${video.views_formatted || '0 просмотров'} • ${video.upload_date_formatted || 'Недавно'}</div>
+                        <div class="result-channel">
+                            <div class="channel-avatar">${avatarContent}</div>
+                            <div class="channel-name">${video.display_name || video.channel}</div>
+                        </div>
+                        <div class="result-description">
+                            ${video.description ? (video.description.length > 150 ? video.description.substring(0, 147) + '...' : video.description) : ''}
+                        </div>
+                    </div>
+                `;
+                
+                searchResultsContainer.appendChild(resultItem);
+            });
+        }
+        
+        // Filter functionality
+        const filterItems = document.querySelectorAll('.filter-item');
         filterItems.forEach(item => {
             item.addEventListener('click', function() {
-                // Снимаем активный класс со всех фильтров
+                // Remove active class from all filters
                 filterItems.forEach(filter => filter.classList.remove('active'));
                 
-                // Добавляем активный класс выбранному фильтру
+                // Add active class to clicked filter
                 this.classList.add('active');
                 
-                // Получаем тип фильтра
+                // Get filter type
                 const filterType = this.getAttribute('data-filter');
                 
-                // Показываем/скрываем результаты в зависимости от фильтра
+                // Show/hide results based on filter
+                const resultItems = document.querySelectorAll('.search-result-item');
                 resultItems.forEach(result => {
                     if (filterType === 'all' || result.getAttribute('data-type') === filterType) {
                         result.style.display = 'flex';
@@ -411,110 +525,6 @@
                 });
             });
         });
-    }
-    
-    // Настройка кнопки "Загрузить еще"
-    function setupLoadMore() {
-        const loadMoreBtn = document.getElementById('load-more-btn');
-        
-        if (!loadMoreBtn) return;
-        
-        // Получаем параметры из URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const query = urlParams.get('query');
-        
-        // Определяем начальное смещение для следующей порции
-        let currentOffset = parseInt(document.querySelectorAll('.search-result-item').length);
-        
-        loadMoreBtn.addEventListener('click', function() {
-            this.textContent = 'Загрузка...';
-            this.disabled = true;
-            
-            // Запрашиваем следующую порцию результатов
-            fetch(`/search?query=${encodeURIComponent(query)}&offset=${currentOffset}&format=json`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.videos && data.videos.length > 0) {
-                        // Добавляем новые результаты
-                        appendSearchResults(data.videos);
-                        
-                        // Обновляем смещение
-                        currentOffset += data.videos.length;
-                        
-                        // Активируем кнопку, если есть еще результаты
-                        if (data.videos.length < 20 || currentOffset >= data.total) {
-                            loadMoreBtn.style.display = 'none';
-                        } else {
-                            loadMoreBtn.textContent = 'Загрузить ещё';
-                            loadMoreBtn.disabled = false;
-                        }
-                        
-                        // Переинициализируем ленивую загрузку
-                        initializeLazyLoading();
-                    } else {
-                        loadMoreBtn.style.display = 'none';
-                    }
-                })
-                .catch(error => {
-                    console.error('Ошибка загрузки результатов:', error);
-                    loadMoreBtn.textContent = 'Ошибка загрузки';
-                    setTimeout(() => {
-                        loadMoreBtn.textContent = 'Попробовать снова';
-                        loadMoreBtn.disabled = false;
-                    }, 2000);
-                });
-        });
-    }
-    
-    // Добавление результатов поиска
-    function appendSearchResults(videos) {
-        const container = document.getElementById('search-results-container');
-        
-        videos.forEach(video => {
-            const resultItem = document.createElement('div');
-            resultItem.className = 'search-result-item';
-            resultItem.setAttribute('data-type', 'videos');
-            resultItem.onclick = function() {
-                window.location.href = `/video/${video.user_id}__${video.video_id}/`;
-            };
-            
-            const thumbnailUrl = video.thumbnail_url || '/static/placeholder.jpg';
-            const displayName = video.display_name || video.channel || 'Unknown';
-            const firstLetter = displayName.charAt(0);
-            
-            resultItem.innerHTML = `
-                <div class="result-thumbnail">
-                    <img src="${thumbnailUrl}" alt="${video.title}" loading="lazy" onerror="this.src='/static/placeholder.jpg'" ${!video.thumbnail_url ? `data-user-id="${video.user_id}" data-video-id="${video.video_id}" class="lazy-thumbnail"` : ''}>
-                    <div class="result-duration">${video.duration || '00:00'}</div>
-                </div>
-                <div class="result-details">
-                    <h3 class="result-title">${video.title}</h3>
-                    <div class="result-meta">${video.views_formatted || '0 просмотров'} • ${video.upload_date_formatted || 'Недавно'}</div>
-                    <div class="result-channel">
-                        <div class="channel-avatar">${firstLetter}</div>
-                        <div class="channel-name">${displayName}</div>
-                    </div>
-                    <div class="result-description">
-                        ${video.description ? (video.description.length > 150 ? video.description.substring(0, 147) + '...' : video.description) : ''}
-                    </div>
-                </div>
-            `;
-            
-            container.appendChild(resultItem);
-        });
-    }
-
-    function setupDebugToggle() {
-        const toggleButton = document.getElementById('toggle-debug');
-        const debugInfo = document.getElementById('debug-info');
-        
-        if (toggleButton && debugInfo) {
-            toggleButton.addEventListener('click', function() {
-                const isVisible = debugInfo.style.display !== 'none';
-                debugInfo.style.display = isVisible ? 'none' : 'block';
-                toggleButton.textContent = isVisible ? 'Показать отладочную информацию' : 'Скрыть отладочную информацию';
-            });
-        }
-    }
+    });
 </script>
 {% endblock %}

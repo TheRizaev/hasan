@@ -163,8 +163,8 @@ def upload_video_to_gcs(request):
 
 def list_all_videos(request):
     """
-    Полностью переработанная функция для получения списка видео.
-    Напрямую ищет видео в GCS без использования кэша.
+    Fixed function to retrieve videos list from GCS.
+    Always adds 'channel' field to prevent template errors.
     """
     try:
         from .gcs_storage import get_bucket, BUCKET_NAME, generate_video_url
@@ -174,9 +174,9 @@ def list_all_videos(request):
         
         logger = logging.getLogger(__name__)
         
-        logger.info("Starting direct list_all_videos API request")
+        logger.info("Starting list_all_videos API request")
         
-        # Параметры пагинации и фильтрации
+        # Parse pagination parameters
         try:
             offset = int(request.GET.get('offset', 0))
         except (ValueError, TypeError):
@@ -189,13 +189,13 @@ def list_all_videos(request):
             
         only_metadata = request.GET.get('only_metadata', 'false').lower() == 'true'
         
-        # Получаем бакет
+        # Get bucket
         bucket = get_bucket(BUCKET_NAME)
         if not bucket:
             logger.error("Failed to get bucket")
-            return JsonResponse({'error': 'Не удалось получить доступ к хранилищу'}, status=500)
+            return JsonResponse({'error': 'Failed to access storage', 'success': False}, status=500)
         
-        # Получаем список пользователей напрямую
+        # Get list of users from GCS
         blobs = list(bucket.list_blobs(max_results=100))
         users = set()
         for blob in blobs:
@@ -203,18 +203,18 @@ def list_all_videos(request):
             if parts and parts[0] and parts[0].startswith('@'):
                 users.add(parts[0])
         
-        logger.info(f"Found {len(users)} users in direct fetch")
+        logger.info(f"Found {len(users)} users in GCS")
         
-        # Собираем все видео
+        # Collect all videos
         all_videos = []
         
         for user_id in users:
             try:
-                # Ищем папку metadata для пользователя
+                # Look for metadata folder
                 metadata_prefix = f"{user_id}/metadata/"
                 metadata_blobs = list(bucket.list_blobs(prefix=metadata_prefix))
                 
-                # Получаем профиль пользователя
+                # Get user profile for display name
                 user_profile = None
                 try:
                     user_meta_blob = bucket.blob(f"{user_id}/bio/user_meta.json")
@@ -223,24 +223,26 @@ def list_all_videos(request):
                 except Exception as profile_error:
                     logger.error(f"Error loading profile for {user_id}: {profile_error}")
                 
-                # Перебираем все JSON-файлы метаданных для видео
+                # Process all metadata JSON files for videos
                 for blob in metadata_blobs:
                     if blob.name.endswith('.json'):
                         try:
-                            # Получаем метаданные видео
+                            # Get video metadata
                             metadata = json.loads(blob.download_as_text())
                             
-                            # Добавляем информацию о пользователе
+                            # Add user information
                             metadata['user_id'] = user_id
-                            if user_profile:
-                                metadata['display_name'] = user_profile.get('display_name', user_id.replace('@', ''))
+                            
+                            # Add display_name from user profile or fallback
+                            if user_profile and 'display_name' in user_profile:
+                                metadata['display_name'] = user_profile['display_name']
                             else:
                                 metadata['display_name'] = user_id.replace('@', '')
                             
-                            # Добавляем канал для совместимости с шаблоном
-                            metadata['channel'] = metadata.get('display_name', user_id.replace('@', ''))
+                            # IMPORTANT FIX: Always add 'channel' field to prevent template errors
+                            metadata['channel'] = metadata.get('display_name') or user_id.replace('@', '')
                             
-                            # Форматируем просмотры
+                            # Format views
                             views = metadata.get('views', 0)
                             if isinstance(views, (int, str)) and str(views).isdigit():
                                 views = int(views)
@@ -248,7 +250,7 @@ def list_all_videos(request):
                             else:
                                 metadata['views_formatted'] = "0 просмотров"
                             
-                            # Форматируем дату загрузки
+                            # Format upload date
                             upload_date = metadata.get('upload_date', '')
                             if upload_date:
                                 try:
@@ -265,17 +267,17 @@ def list_all_videos(request):
             except Exception as e:
                 logger.error(f"Error processing user {user_id}: {e}")
         
-        # Проверяем, нашли ли мы видео
+        # Check if we found any videos
         if not all_videos:
-            logger.warning("No videos found in direct search")
-            # Возвращаем пустой список
+            logger.warning("No videos found in GCS")
+            # Return empty list
             return JsonResponse({
                 'success': True,
                 'videos': [],
                 'total': 0
             })
         
-        # Сортируем видео по дате загрузки (новые сначала)
+        # Sort videos by upload date (newest first)
         try:
             all_videos.sort(key=lambda x: x.get('upload_date', ''), reverse=True)
         except Exception as sort_error:
@@ -283,22 +285,22 @@ def list_all_videos(request):
         
         total_videos = len(all_videos)
         
-        # Применяем пагинацию
+        # Apply pagination
         paginated_videos = all_videos[offset:offset + limit]
         
-        # Если запрашиваются только метаданные, возвращаем их как есть
+        # If requesting full data with URLs, generate URLs for videos and thumbnails
         if not only_metadata:
-            # Генерируем URL для видео и миниатюр
+            # Generate URLs for videos and thumbnails
             for video in paginated_videos:
                 try:
                     video_id = video.get('video_id')
                     user_id = video.get('user_id')
                     
                     if video_id and user_id:
-                        # URL для видео
+                        # URL for video
                         video['url'] = generate_video_url(user_id, video_id, expiration_time=3600)
                         
-                        # URL для миниатюры
+                        # URL for thumbnail
                         if 'thumbnail_path' in video:
                             video['thumbnail_url'] = generate_video_url(
                                 user_id, video_id, file_path=video['thumbnail_path'], expiration_time=3600
@@ -306,7 +308,7 @@ def list_all_videos(request):
                 except Exception as url_error:
                     logger.error(f"Error generating URL for video {video.get('video_id')}: {url_error}")
         
-        logger.info(f"Returning {len(paginated_videos)} videos from direct fetch")
+        logger.info(f"Returning {len(paginated_videos)} videos from total {total_videos}")
         return JsonResponse({
             'success': True,
             'videos': paginated_videos,
@@ -315,7 +317,7 @@ def list_all_videos(request):
     
     except Exception as e:
         import traceback
-        logger.error(f"Error in direct list_all_videos: {e}")
+        logger.error(f"Error in list_all_videos: {e}")
         logger.error(traceback.format_exc())
         
         return JsonResponse({
