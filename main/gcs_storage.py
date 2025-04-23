@@ -112,6 +112,26 @@ def get_bucket(bucket_name=BUCKET_NAME):
         import traceback
         logger.error(traceback.format_exc())
         return None
+    
+def update_video_metadata(user_id, video_id, metadata):
+    try:
+        bucket = get_bucket()
+        if not bucket:
+            return False
+        metadata_path = f"{user_id}/metadata/{video_id}.json"
+        blob = bucket.blob(metadata_path)
+        if not blob.exists():
+            return False
+        blob.reload()
+        blob.upload_from_string(
+            json.dumps(metadata, indent=2),
+            content_type='application/json',
+            if_generation_match=blob.generation  # Условие: обновляем, только если версия не изменилась
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Error updating video metadata for {user_id}/{video_id}: {e}")
+        return False
 
 def create_user_folder_structure(user_id):
     """

@@ -56,7 +56,41 @@ class UserProfile(models.Model):
     def get_absolute_url(self):
         return reverse('profile')
 
+class VideoLike(models.Model):
+    """
+    Model to store video likes and dislikes
+    
+    This model tracks user interactions with videos (likes/dislikes)
+    and ensures each user can only have one interaction per video.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='video_likes')
+    video_id = models.CharField(max_length=255)
+    video_owner = models.CharField(max_length=255)  # Video owner's user_id (renamed from user_id)
+    is_like = models.BooleanField()  # True for like, False for dislike
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ('user', 'video_id', 'video_owner')
+        verbose_name = 'Video Like'
+        verbose_name_plural = 'Video Likes'
+        
+    def __str__(self):
+        action = "liked" if self.is_like else "disliked"
+        return f"{self.user.username} {action} video {self.video_id} by {self.video_owner}"
+    
+class VideoView(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)  # Null для неавторизованных
+    video_id = models.CharField(max_length=255)  # ID видео в GCS
+    video_owner = models.CharField(max_length=255)  # Владелец видео (user_id)
+    session_id = models.CharField(max_length=255, null=True, blank=True)  # Для неавторизованных пользователей
+    viewed_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        unique_together = [
+            ('user', 'video_id', 'video_owner'),  # Уникальность для авторизованных
+            ('session_id', 'video_id', 'video_owner'),  # Уникальность для неавторизованных
+        ]
+    
 # Add new model for expertise areas
 class ExpertiseArea(models.Model):
     name = models.CharField(max_length=100)
@@ -64,3 +98,4 @@ class ExpertiseArea(models.Model):
     
     def __str__(self):
         return self.name
+    

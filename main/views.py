@@ -1,7 +1,9 @@
 
 from django.shortcuts import render, redirect
-from .models import Video, Category
+from .models import VideoLike, Category
 import random
+from .gcs_storage import get_video_metadata, get_bucket
+from django.db import transaction
 from django.contrib.auth import authenticate, login, logout
 from django.shortcuts import redirect
 from django.contrib import messages
@@ -34,28 +36,9 @@ def index(request):
     categories = Category.objects.all()
     
     try:
-        # Импортируем только необходимые функции
-        from .gcs_storage import get_bucket, BUCKET_NAME
-        import logging
-        logger = logging.getLogger(__name__)
-        
         logger.info("Starting optimized video metadata loading for index page")
         
-        # Смотрим, есть ли кэшированные данные в сессии и используем их, если они не устарели
-        cached_videos = request.session.get('cached_videos', None)
-        cached_timestamp = request.session.get('cached_videos_timestamp', 0)
-        current_timestamp = int(datetime.datetime.now().timestamp())
-        
-        # Используем кэш, если он не старше 5 минут
-        if cached_videos and (current_timestamp - cached_timestamp) < 300:
-            logger.info(f"Using cached videos data ({len(cached_videos)} videos)")
-            return render(request, 'main/index.html', {
-                'categories': categories,
-                'gcs_videos': cached_videos
-            })
-        
-        # Запрашиваем только метаданные первых 20 видео через API
-        # Этот API вызов должен быть оптимизирован в gcs_views.py
+        # Запрашиваем метаданные первых 20 видео через API без использования кэша
         response = requests.get(f"{request.scheme}://{request.get_host()}/api/list-all-videos/?only_metadata=true&limit=20")
         
         if response.status_code == 200:
@@ -63,11 +46,10 @@ def index(request):
             if data.get('success') and data.get('videos'):
                 selected_videos = data.get('videos')
                 
-                # Кэшируем результаты в сессии для последующих запросов
-                request.session['cached_videos'] = selected_videos
-                request.session['cached_videos_timestamp'] = current_timestamp
+                # Перетасовываем видео для случайного порядка
+                random.shuffle(selected_videos)
                 
-                logger.info(f"Successfully loaded {len(selected_videos)} video metadata from API")
+                logger.info(f"Successfully loaded and shuffled {len(selected_videos)} video metadata from API")
                 return render(request, 'main/index.html', {
                     'categories': categories,
                     'gcs_videos': selected_videos
@@ -1111,86 +1093,190 @@ def search_page(request):
     """
     return render(request, 'main/search_page.html')
 
-def debug_storage(request):
-    """
-    Страница для отладки хранилища GCS
-    """
-    context = {
-        'debug_info': {
-            'title': 'Отладка хранилища GCS',
-            'storage_name': None,
-            'connection_status': 'Неизвестно',
-            'users': [],
-            'user_count': 0,
-            'videos': [],
-            'video_count': 0,
-            'errors': []
-        }
-    }
-    
+def toggle_video_like(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid method'}, status=405)
+
     try:
-        from .gcs_storage import get_bucket, BUCKET_NAME
-        import json
-        
-        context['debug_info']['storage_name'] = BUCKET_NAME
-        
-        # Получаем бакет
-        bucket = get_bucket(BUCKET_NAME)
-        if not bucket:
-            context['debug_info']['connection_status'] = 'Ошибка: не удалось подключиться к хранилищу'
-            context['debug_info']['errors'].append('Не удалось получить бакет')
-            return render(request, 'main/debug_storage.html', context)
-        
-        context['debug_info']['connection_status'] = 'Подключение установлено'
-        
-        # Получаем список пользователей
-        blobs = bucket.list_blobs(delimiter='/')
-        prefixes = list(blobs.prefixes)
-        users = [prefix.replace('/', '') for prefix in prefixes if not prefix.startswith('system/')]
-        
-        context['debug_info']['users'] = users
-        context['debug_info']['user_count'] = len(users)
-        
-        # Получаем информацию о видео в хранилище
-        videos_info = []
-        videos_with_core = []
-        
-        for user_id in users[:5]:  # Ограничимся первыми 5 пользователями для скорости
-            # Ищем папку metadata для пользователя
-            metadata_prefix = f"{user_id}/metadata/"
-            metadata_blobs = list(bucket.list_blobs(prefix=metadata_prefix))
-            
-            for blob in metadata_blobs:
-                if blob.name.endswith('.json'):
-                    try:
-                        metadata_text = blob.download_as_text()
-                        metadata = json.loads(metadata_text)
-                        video_title = metadata.get('title', 'Без названия')
-                        video_id = metadata.get('video_id', 'unknown')
-                        
-                        video_info = {
-                            'user_id': user_id,
-                            'video_id': video_id,
-                            'title': video_title,
-                            'path': blob.name
-                        }
-                        
-                        videos_info.append(video_info)
-                        
-                        # Проверяем наличие CORE в названии
-                        if 'CORE' in video_title.upper():
-                            videos_with_core.append(video_info)
-                    except Exception as e:
-                        context['debug_info']['errors'].append(f"Ошибка при обработке метаданных {blob.name}: {str(e)}")
-        
-        context['debug_info']['videos'] = videos_info
-        context['debug_info']['video_count'] = len(videos_info)
-        context['debug_info']['videos_with_core'] = videos_with_core
-        context['debug_info']['videos_with_core_count'] = len(videos_with_core)
-        
+        video_id = request.POST.get('video_id')
+        user_id = request.POST.get('user_id')
+
+        if not video_id or not user_id:
+            return JsonResponse({'success': False, 'error': 'Missing video_id or user_id'}, status=400)
+
+        # Разделяем составной ID, если он передан
+        if '__' in video_id:
+            user_id, video_id = video_id.split('__', 1)
+
+        # Получаем метаданные видео
+        metadata = get_video_metadata(user_id, video_id)
+        if not metadata:
+            return JsonResponse({'success': False, 'error': 'Video not found'}, status=404)
+
+        # Используем транзакцию для атомарного обновления
+        with transaction.atomic():
+            try:
+                existing_like = VideoLike.objects.get(
+                    user=request.user,
+                    video_id=video_id,
+                    video_owner=user_id
+                )
+                if existing_like.is_like:
+                    # Удаляем лайк
+                    metadata['likes'] = max(0, int(metadata.get('likes', 0)) - 1)
+                    existing_like.delete()
+                    is_liked = False
+                else:
+                    # Меняем дизлайк на лайк
+                    metadata['likes'] = int(metadata.get('likes', 0)) + 1
+                    metadata['dislikes'] = max(0, int(metadata.get('dislikes', 0)) - 1)
+                    existing_like.is_like = True
+                    existing_like.save()
+                    is_liked = True
+            except VideoLike.DoesNotExist:
+                # Новый лайк
+                metadata['likes'] = int(metadata.get('likes', 0)) + 1
+                VideoLike.objects.create(
+                    user=request.user,
+                    video_id=video_id,
+                    video_owner=user_id,
+                    is_like=True
+                )
+                is_liked = True
+
+            # Обновляем метаданные в GCS
+            bucket = get_bucket()
+            if not bucket:
+                return JsonResponse({'success': False, 'error': 'Failed to access storage'}, status=500)
+
+            metadata_path = f"{user_id}/metadata/{video_id}.json"
+            metadata_blob = bucket.blob(metadata_path)
+            if not metadata_blob.exists():
+                return JsonResponse({'success': False, 'error': 'Metadata not found'}, status=404)
+
+            metadata_blob.upload_from_string(json.dumps(metadata, indent=2), content_type='application/json')
+
+        return JsonResponse({
+            'success': True,
+            'likes': metadata['likes'],
+            'dislikes': metadata.get('dislikes', 0),
+            'is_liked': is_liked,
+            'is_disliked': False
+        })
+
     except Exception as e:
-        import traceback
-        context['debug_info']['errors'].append(f"Общая ошибка: {str(e)}")
-        context['debug_info']['traceback'] = traceback.format_exc()
-    
-    return render(request, 'main/debug_storage.html', context)
+        logger.error(f"Error toggling like: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@login_required
+def toggle_video_dislike(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid method'}, status=405)
+
+    try:
+        video_id = request.POST.get('video_id')
+        user_id = request.POST.get('user_id')
+
+        if not video_id or not user_id:
+            return JsonResponse({'success': False, 'error': 'Missing video_id or user_id'}, status=400)
+
+        # Разделяем составной ID
+        if '__' in video_id:
+            user_id, video_id = video_id.split('__', 1)
+
+        # Получаем метаданные видео
+        metadata = get_video_metadata(user_id, video_id)
+        if not metadata:
+            return JsonResponse({'success': False, 'error': 'Video not found'}, status=404)
+
+        # Используем транзакцию для атомарного обновления
+        with transaction.atomic():
+            try:
+                existing_like = VideoLike.objects.get(
+                    user=request.user,
+                    video_id=video_id,
+                    video_owner=user_id
+                )
+                if not existing_like.is_like:
+                    # Удаляем дизлайк
+                    metadata['dislikes'] = max(0, int(metadata.get('dislikes', 0)) - 1)
+                    existing_like.delete()
+                    is_disliked = False
+                else:
+                    # Меняем лайк на дизлайк
+                    metadata['dislikes'] = int(metadata.get('dislikes', 0)) + 1
+                    metadata['likes'] = max(0, int(metadata.get('likes', 0)) - 1)
+                    existing_like.is_like = False
+                    existing_like.save()
+                    is_disliked = True
+            except VideoLike.DoesNotExist:
+                # Новый дизлайк
+                metadata['dislikes'] = int(metadata.get('dislikes', 0)) + 1
+                VideoLike.objects.create(
+                    user=request.user,
+                    video_id=video_id,
+                    video_owner=user_id,
+                    is_like=False
+                )
+                is_disliked = True
+
+            # Обновляем метаданные в GCS
+            bucket = get_bucket()
+            if not bucket:
+                return JsonResponse({'success': False, 'error': 'Failed to access storage'}, status=500)
+
+            metadata_path = f"{user_id}/metadata/{video_id}.json"
+            metadata_blob = bucket.blob(metadata_path)
+            if not metadata_blob.exists():
+                return JsonResponse({'success': False, 'error': 'Metadata not found'}, status=404)
+
+            metadata_blob.upload_from_string(json.dumps(metadata, indent=2), content_type='application/json')
+
+        return JsonResponse({
+            'success': True,
+            'likes': metadata.get('likes', 0),
+            'dislikes': metadata['dislikes'],
+            'is_liked': False,
+            'is_disliked': is_disliked
+        })
+
+    except Exception as e:
+        logger.error(f"Error toggling dislike: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+def get_video_like_status(request, video_id):
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': True,
+            'is_liked': False,
+            'is_disliked': False,
+            'authenticated': False
+        })
+
+    try:
+        user_id = request.GET.get('user_id')
+        if '__' in video_id:
+            user_id, video_id = video_id.split('__', 1)
+
+        try:
+            existing_like = VideoLike.objects.get(
+                user=request.user,
+                video_id=video_id,
+                video_owner=user_id
+            )
+            return JsonResponse({
+                'success': True,
+                'is_liked': existing_like.is_like,
+                'is_disliked': not existing_like.is_like,
+                'authenticated': True
+            })
+        except VideoLike.DoesNotExist:
+            return JsonResponse({
+                'success': True,
+                'is_liked': False,
+                'is_disliked': False,
+                'authenticated': True
+            })
+    except Exception as e:
+        logger.error(f"Error getting like status: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)

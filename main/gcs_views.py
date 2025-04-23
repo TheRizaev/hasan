@@ -2,18 +2,14 @@ from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.contrib import messages
-from .models import Category, Video
+from .models import Category, Video, VideoView
+from django.db import transaction
 from django.views.decorators.http import require_http_methods
 from django.conf import settings
 import os
-from .gcs_storage import upload_video_with_quality_processing, get_video_metadata, upload_thumbnail, generate_video_url, get_video_url_with_quality, BUCKET_NAME
-from .video_quality_processor import process_video_quality_async
-import json
-from datetime import datetime, timedelta
+from .gcs_storage import update_video_metadata, upload_video_with_quality_processing, get_video_metadata, upload_thumbnail, generate_video_url, get_video_url_with_quality, BUCKET_NAME
 import uuid
-import tempfile
 import logging
-import random
 logger = logging.getLogger(__name__)
 
 from .gcs_storage import (
@@ -1007,157 +1003,73 @@ def add_reply(request):
         import traceback
         logger.error(traceback.format_exc())
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
-    
-@require_http_methods(["POST"])
+
 def track_video_view(request):
     """
-    API endpoint для отслеживания просмотров видео.
-    Защищает от дублирования просмотров с одного IP-адреса и пользователя.
-    
-    Требует:
-    - video_id: ID видео
-    - user_id: ID владельца видео (опционально, может быть извлечен из video_id)
-    
-    Возвращает:
-    - success: Результат операции
-    - views: Обновленное количество просмотров (если успешно)
+    API endpoint for tracking video views
     """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid method'}, status=405)
+
     try:
-        # Получаем данные запроса
         video_id = request.POST.get('video_id')
         user_id = request.POST.get('user_id')
-        
-        if not video_id:
-            return JsonResponse({'success': False, 'error': 'Не указан ID видео'}, status=400)
-        
-        # Проверяем, содержит ли video_id данные о пользователе
-        if '__' in video_id and not user_id:
-            parts = video_id.split('__', 1)
-            if len(parts) == 2:
-                user_id = parts[0]
-                video_id = parts[1]
-                logger.info(f"Extracted user_id={user_id}, video_id={video_id} from composite ID")
-        
-        # Если по-прежнему нет user_id, пытаемся найти видео
-        if not user_id:
-            # Если пользователь авторизован, проверяем, его ли это видео
-            if request.user.is_authenticated:
-                username = request.user.username
-                from .gcs_storage import get_video_metadata
-                
-                logger.info(f"Checking if video {video_id} belongs to current user {username}")
-                metadata = get_video_metadata(username, video_id)
-                
-                if metadata:
-                    user_id = username
-                    logger.info(f"Video belongs to current user {username}")
-                else:
-                    # Если видео не принадлежит текущему пользователю, ищем владельца
-                    from .gcs_storage import get_bucket, BUCKET_NAME
-                    
-                    bucket = get_bucket(BUCKET_NAME)
-                    if not bucket:
-                        return JsonResponse({'success': False, 'error': 'Ошибка доступа к хранилищу'}, status=500)
-                    
-                    # Получаем список пользователей
-                    blobs = bucket.list_blobs(delimiter='/')
-                    prefixes = list(blobs.prefixes)
-                    users = [prefix.replace('/', '') for prefix in prefixes 
-                            if not prefix.startswith('system/')]
-                    
-                    logger.info(f"Searching for video owner among {len(users)} users")
-                    
-                    # Ищем видео среди всех пользователей
-                    for potential_user_id in users:
-                        if potential_user_id == username:
-                            continue  # Уже проверяли
-                        
-                        logger.info(f"Checking user: {potential_user_id}")
-                        metadata = get_video_metadata(potential_user_id, video_id)
-                        if metadata:
-                            user_id = potential_user_id
-                            logger.info(f"Found video owner: {potential_user_id}")
-                            break
-            
-            # Если мы все еще не нашли владельца, возвращаем ошибку
-            if not user_id:
-                logger.error(f"Could not find owner for video {video_id}")
-                return JsonResponse({'success': False, 'error': 'Не удалось найти владельца видео'}, status=404)
-        
-        # Получаем IP-адрес пользователя
-        ip_address = get_client_ip(request)
-        
-        # Получаем идентификатор пользователя или сессии
-        user_identifier = request.user.username if request.user.is_authenticated else request.session.session_key
-        
-        # Если сессия ещё не создана, создаем её
-        if not user_identifier:
-            request.session.save()
-            user_identifier = request.session.session_key
-        
-        # Создаем уникальный ключ для этого просмотра (видео + пользователь/сессия + IP)
-        view_key = f"view_{user_id}_{video_id}_{user_identifier}_{ip_address}"
-        
-        # Проверяем, был ли уже засчитан просмотр от этого пользователя
-        from django.core.cache import cache
-        if cache.get(view_key):
-            logger.info(f"View already counted for video {video_id} from {user_identifier} ({ip_address})")
-            return JsonResponse({'success': False, 'reason': 'already_viewed'})
-        
-        # Увеличиваем счетчик просмотров в метаданных видео
-        from .gcs_storage import get_video_metadata, get_bucket
-        
+        session_id = request.POST.get('session_id')
+
+        if not video_id or not user_id:
+            return JsonResponse({'success': False, 'error': 'Missing video_id or user_id'}, status=400)
+
+        # Разделяем составной ID
+        if '__' in video_id:
+            user_id, video_id = video_id.split('__', 1)
+
+        # Получаем метаданные видео
         metadata = get_video_metadata(user_id, video_id)
         if not metadata:
-            logger.error(f"Metadata not found for video {video_id}")
-            return JsonResponse({'success': False, 'error': 'Метаданные видео не найдены'}, status=404)
-        
-        # Увеличиваем количество просмотров
-        current_views = int(metadata.get('views', 0))
-        new_views = current_views + 1
-        metadata['views'] = new_views
-        
-        # Форматируем просмотры для отображения
-        if new_views >= 1000:
-            views_formatted = f"{new_views // 1000}K просмотров"
-        else:
-            views_formatted = f"{new_views} просмотров"
-        
-        metadata['views_formatted'] = views_formatted
-        
-        # Сохраняем обновленные метаданные обратно в GCS
-        bucket = get_bucket()
-        if not bucket:
-            logger.error(f"Could not get bucket for updating views")
-            return JsonResponse({'success': False, 'error': 'Ошибка доступа к хранилищу'}, status=500)
-        
-        metadata_path = f"{user_id}/metadata/{video_id}.json"
-        metadata_blob = bucket.blob(metadata_path)
-        
-        if not metadata_blob.exists():
-            logger.error(f"Metadata blob not found at {metadata_path}")
-            return JsonResponse({'success': False, 'error': 'Метаданные видео не найдены'}, status=404)
-        
-        # Сохраняем обновленные метаданные
-        import json
-        metadata_blob.upload_from_string(json.dumps(metadata, indent=2), content_type='application/json')
-        
-        # Сохраняем в кэше информацию о просмотре (на 24 часа)
-        cache.set(view_key, True, 60 * 60 * 24)
-        
-        logger.info(f"View counted for video {video_id}, new count: {new_views}")
-        
-        # Возвращаем успех и новое количество просмотров
+            return JsonResponse({'success': False, 'error': 'Video not found'}, status=404)
+
+        # Проверяем, был ли уже просмотр
+        view_exists = False
+        with transaction.atomic():
+            if request.user.is_authenticated:
+                # Для авторизованных пользователей
+                view_exists = VideoView.objects.filter(
+                    user=request.user,
+                    video_id=video_id,
+                    video_owner=user_id
+                ).exists()
+            else:
+                # Для неавторизованных пользователей используем session_id
+                if not session_id:
+                    return JsonResponse({'success': False, 'error': 'Session ID required for non-authenticated users'}, status=400)
+                view_exists = VideoView.objects.filter(
+                    session_id=session_id,
+                    video_id=video_id,
+                    video_owner=user_id
+                ).exists()
+
+            if not view_exists:
+                # Регистрируем новый просмотр
+                metadata['views'] = int(metadata.get('views', 0)) + 1
+                VideoView.objects.create(
+                    user=request.user if request.user.is_authenticated else None,
+                    video_id=video_id,
+                    video_owner=user_id,
+                    session_id=session_id if not request.user.is_authenticated else None
+                )
+
+                # Обновляем метаданные в GCS
+                if not update_video_metadata(user_id, video_id, metadata):
+                    return JsonResponse({'success': False, 'error': 'Failed to update metadata'}, status=500)
+
         return JsonResponse({
-            'success': True, 
-            'views': new_views,
-            'views_formatted': views_formatted
+            'success': True,
+            'views': metadata.get('views', 0),
+            'view_counted': not view_exists
         })
-    
+
     except Exception as e:
-        logger.error(f"Error tracking video view: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
+        logger.error(f"Error tracking view: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 def get_client_ip(request):

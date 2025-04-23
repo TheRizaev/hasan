@@ -1,6 +1,7 @@
 {% extends 'main/base.html' %}
 {% load static %}
-
+{% load humanize %}
+{% load format_views %}
 {% block title %}KRONIK{% endblock %}
 
 {% block head_extra %}
@@ -32,7 +33,6 @@
                 {% if video.thumbnail_url %}
                     <img src="{{ video.thumbnail_url }}" alt="{{ video.title }}" loading="lazy" onerror="this.src='{% static 'placeholder.jpg' %}'">
                 {% else %}
-                    <!-- Используем плейсхолдер и заготавливаем элемент для ленивой загрузки -->
                     <img class="lazy-load-thumbnail" src="{% static 'placeholder.jpg' %}" data-video-id="{{ video.video_id }}" data-user-id="{{ video.user_id }}" alt="{{ video.title }}" loading="lazy">
                 {% endif %}
                 <div class="duration">{{ video.duration|default:"00:00" }}</div>
@@ -41,7 +41,7 @@
                 <div class="video-title">{{ video.title }}</div>
                 <div class="channel-name">{{ video.display_name|default:video.channel }}</div>
                 <div class="video-stats">
-                    <span>{{ video.views_formatted|default:"0 просмотров" }}</span>
+                    <span>{{ video.views|format_views }} просмотров</span>
                     <span>• {{ video.upload_date_formatted|default:"Недавно" }}</span>
                 </div>
             </div>

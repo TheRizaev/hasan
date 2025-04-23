@@ -148,15 +148,15 @@
                 <div class="views-info">{{ video.views_formatted }} • {{ video.upload_date_formatted|default:video.age }}</div>
                 <div class="actions-bar">
                     <button class="action-button" id="likeButton">
-                        <img src="/static/icons/like.svg" alt="Like" width="20" height="20">
+                        <img src="{% static 'icons/like.svg' %}" alt="Like" width="20" height="20">
                         <span id="likeCount">{{ video.likes|default:"0" }}</span>
                     </button>
                     <button class="action-button" id="dislikeButton">
-                        <img src="/static/icons/dislike.svg" alt="Dislike" width="20" height="20">
+                        <img src="{% static 'icons/dislike.svg' %}" alt="Dislike" width="20" height="20">
                         <span id="dislikeCount">{{ video.dislikes|default:"0" }}</span>
                     </button>
                     <button class="action-button" id="shareButton">
-                        <img src="/static/icons/share.svg" alt="Share" width="20" height="20">
+                        <img src="{% static 'icons/share.svg' %}" alt="Share" width="20" height="20">
                         Поделиться
                     </button>
                 </div>
@@ -411,201 +411,286 @@
 <script src="{% static 'js/video-sharing.js' %}"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Получаем элементы
         const likeButton = document.getElementById('likeButton');
         const dislikeButton = document.getElementById('dislikeButton');
         const likeCount = document.getElementById('likeCount');
         const dislikeCount = document.getElementById('dislikeCount');
         const videoContainer = document.querySelector('.video-container');
-        
-        if (!videoContainer || !likeButton || !dislikeButton) return;
-        
-        // Получаем информацию о видео
+        const videoPlayer = document.getElementById('video-player');
+        const viewsInfo = document.querySelector('.views-info');
+
+        if (!videoContainer || !likeButton || !dislikeButton || !videoPlayer || !viewsInfo) {
+            console.error('Required elements not found');
+            return;
+        }
+
         const videoId = videoContainer.getAttribute('data-video-id');
         const userId = videoContainer.getAttribute('data-user-id');
         const compositeId = `${userId}__${videoId}`;
-        
-        // Создаем окно для неавторизованных пользователей
+        let isLiked = false;
+        let isDisliked = false;
+        let viewTracked = false;
+        let watchStartTime = null;
+
+        // Генерация или получение session_id для неавторизованных пользователей
+        let sessionId = localStorage.getItem('session_id');
+        if (!sessionId) {
+            sessionId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+            localStorage.setItem('session_id', sessionId);
+        }
+
+        // Окно авторизации
         function createLoginPrompt() {
             const loginPrompt = document.createElement('div');
             loginPrompt.className = 'login-prompt';
             loginPrompt.innerHTML = `
-                <button class="close-btn">&times;</button>
+                <button class="close-btn">×</button>
                 <h3>Требуется авторизация</h3>
                 <p>Чтобы оценить видео, необходимо <a href="/login/?next=/video/${compositeId}/">войти</a> или <a href="/register/">зарегистрироваться</a>.</p>
             `;
-            
             const backdrop = document.createElement('div');
             backdrop.className = 'login-prompt-backdrop';
-            
             document.body.appendChild(loginPrompt);
             document.body.appendChild(backdrop);
-            
-            // Кнопка закрытия
+
             const closeBtn = loginPrompt.querySelector('.close-btn');
             closeBtn.addEventListener('click', function() {
                 loginPrompt.classList.remove('show');
                 backdrop.classList.remove('show');
             });
-            
-            // Закрытие при клике вне окна
             backdrop.addEventListener('click', function() {
                 loginPrompt.classList.remove('show');
                 backdrop.classList.remove('show');
             });
-            
+
             return { loginPrompt, backdrop };
         }
-        
-        // Создаем окно логина
+
         const { loginPrompt, backdrop } = createLoginPrompt();
-        
-        // Функция для отображения окна логина
+
         function showLoginPrompt() {
             loginPrompt.classList.add('show');
             backdrop.classList.add('show');
         }
-        
-        // Проверяем статус лайка при загрузке страницы
+
+        // Получение начального статуса лайка/дизлайка
         fetch(`/api/video-like-status/${compositeId}/?user_id=${userId}`)
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    if (data.is_liked) {
-                        likeButton.classList.add('active');
-                    } else if (data.is_disliked) {
-                        dislikeButton.classList.add('active');
-                    }
+                    isLiked = data.is_liked;
+                    isDisliked = data.is_disliked;
+                    likeButton.classList.toggle('active', isLiked);
+                    dislikeButton.classList.toggle('active', isDisliked);
+                    console.log('Like status loaded:', { isLiked, isDisliked });
+                } else {
+                    console.error('Error fetching like status:', data.error);
                 }
             })
             .catch(error => console.error('Error fetching like status:', error));
-        
-        // Обработчик нажатия на кнопку лайка с мгновенной обратной связью
+
+        // Обработчик лайка
         likeButton.addEventListener('click', function() {
-            // CSRF токен
             const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-            
-            // Мгновенно обновляем интерфейс для лучшего UX
-            const isActive = likeButton.classList.contains('active');
             const currentLikes = parseInt(likeCount.textContent);
             const currentDislikes = parseInt(dislikeCount.textContent);
-            
-            if (isActive) {
-                // Убираем лайк
+            const previousIsLiked = isLiked;
+            const previousIsDisliked = isDisliked;
+
+            // Оптимистическое обновление UI
+            if (isLiked) {
+                isLiked = false;
                 likeButton.classList.remove('active');
                 likeCount.textContent = Math.max(0, currentLikes - 1);
             } else {
-                // Добавляем лайк
+                isLiked = true;
                 likeButton.classList.add('active');
-                dislikeButton.classList.remove('active');
                 likeCount.textContent = currentLikes + 1;
-                
-                // Если был дизлайк, уменьшаем счетчик дизлайков
-                if (dislikeButton.classList.contains('active')) {
+                if (isDisliked) {
+                    isDisliked = false;
+                    dislikeButton.classList.remove('active');
                     dislikeCount.textContent = Math.max(0, currentDislikes - 1);
                 }
             }
-            
-            // Подготавливаем данные
+
             const formData = new FormData();
             formData.append('video_id', compositeId);
             formData.append('user_id', userId);
-            
-            // Отправляем запрос на сервер (без ожидания ответа)
+
             fetch('/api/toggle-video-like/', {
                 method: 'POST',
-                headers: {
-                    'X-CSRFToken': csrfToken
-                },
+                headers: { 'X-CSRFToken': csrfToken },
                 body: formData
             })
             .then(response => response.json())
             .then(data => {
-                if (!data.success && data.require_login) {
-                    // Отображаем окно логина для неавторизованных пользователей
-                    // Возвращаем интерфейс к исходному состоянию
-                    likeButton.classList.remove('active');
-                    dislikeButton.classList.remove('active');
-                    likeCount.textContent = data.likes || currentLikes;
-                    dislikeCount.textContent = data.dislikes || currentDislikes;
+                if (data.success) {
+                    likeCount.textContent = data.likes;
+                    dislikeCount.textContent = data.dislikes;
+                    isLiked = data.is_liked;
+                    isDisliked = data.is_disliked;
+                    likeButton.classList.toggle('active', isLiked);
+                    dislikeButton.classList.toggle('active', isDisliked);
+                    console.log('Like toggled:', { likes: data.likes, dislikes: data.dislikes });
+                } else if (data.require_login) {
+                    isLiked = previousIsLiked;
+                    isDisliked = previousIsDisliked;
+                    likeButton.classList.toggle('active', previousIsLiked);
+                    dislikeButton.classList.toggle('active', previousIsDisliked);
+                    likeCount.textContent = currentLikes;
+                    dislikeCount.textContent = currentDislikes;
                     showLoginPrompt();
+                } else {
+                    console.error('Error toggling like:', data.error);
+                    isLiked = previousIsLiked;
+                    isDisliked = previousIsDisliked;
+                    likeButton.classList.toggle('active', previousIsLiked);
+                    dislikeButton.classList.toggle('active', previousIsDisliked);
+                    likeCount.textContent = currentLikes;
+                    dislikeCount.textContent = currentDislikes;
                 }
             })
             .catch(error => {
                 console.error('Error toggling like:', error);
-                // В случае ошибки возвращаем UI к прежнему состоянию
-                if (isActive) {
-                    likeButton.classList.add('active');
-                    likeCount.textContent = currentLikes;
-                } else {
-                    likeButton.classList.remove('active');
-                    likeCount.textContent = Math.max(0, currentLikes - 1);
-                }
+                isLiked = previousIsLiked;
+                isDisliked = previousIsDisliked;
+                likeButton.classList.toggle('active', previousIsLiked);
+                dislikeButton.classList.toggle('active', previousIsDisliked);
+                likeCount.textContent = currentLikes;
+                dislikeCount.textContent = currentDislikes;
             });
         });
-        
-        // Обработчик нажатия на кнопку дизлайка с мгновенной обратной связью
+
+        // Обработчик дизлайка
         dislikeButton.addEventListener('click', function() {
-            // CSRF токен
             const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-            
-            // Мгновенно обновляем интерфейс для лучшего UX
-            const isActive = dislikeButton.classList.contains('active');
             const currentLikes = parseInt(likeCount.textContent);
             const currentDislikes = parseInt(dislikeCount.textContent);
-            
-            if (isActive) {
-                // Убираем дизлайк
+            const previousIsLiked = isLiked;
+            const previousIsDisliked = isDisliked;
+
+            // Оптимистическое обновление UI
+            if (isDisliked) {
+                isDisliked = false;
                 dislikeButton.classList.remove('active');
                 dislikeCount.textContent = Math.max(0, currentDislikes - 1);
             } else {
-                // Добавляем дизлайк
+                isDisliked = true;
                 dislikeButton.classList.add('active');
-                likeButton.classList.remove('active');
                 dislikeCount.textContent = currentDislikes + 1;
-                
-                // Если был лайк, уменьшаем счетчик лайков
-                if (likeButton.classList.contains('active')) {
+                if (isLiked) {
+                    isLiked = false;
+                    likeButton.classList.remove('active');
                     likeCount.textContent = Math.max(0, currentLikes - 1);
                 }
             }
-            
-            // Подготавливаем данные
+
             const formData = new FormData();
             formData.append('video_id', compositeId);
             formData.append('user_id', userId);
-            
-            // Отправляем запрос на сервер (без ожидания ответа для мгновенной реакции)
+
             fetch('/api/toggle-video-dislike/', {
                 method: 'POST',
-                headers: {
-                    'X-CSRFToken': csrfToken
-                },
+                headers: { 'X-CSRFToken': csrfToken },
                 body: formData
             })
             .then(response => response.json())
             .then(data => {
-                if (!data.success && data.require_login) {
-                    // Отображаем окно логина для неавторизованных пользователей
-                    // Возвращаем интерфейс к исходному состоянию
-                    likeButton.classList.remove('active');
-                    dislikeButton.classList.remove('active');
-                    likeCount.textContent = data.likes || currentLikes;
-                    dislikeCount.textContent = data.dislikes || currentDislikes;
+                if (data.success) {
+                    likeCount.textContent = data.likes;
+                    dislikeCount.textContent = data.dislikes;
+                    isLiked = data.is_liked;
+                    isDisliked = data.is_disliked;
+                    likeButton.classList.toggle('active', isLiked);
+                    dislikeButton.classList.toggle('active', isDisliked);
+                    console.log('Dislike toggled:', { likes: data.likes, dislikes: data.dislikes });
+                } else if (data.require_login) {
+                    isLiked = previousIsLiked;
+                    isDisliked = previousIsDisliked;
+                    likeButton.classList.toggle('active', previousIsLiked);
+                    dislikeButton.classList.toggle('active', previousIsDisliked);
+                    likeCount.textContent = currentLikes;
+                    dislikeCount.textContent = currentDislikes;
                     showLoginPrompt();
+                } else {
+                    console.error('Error toggling dislike:', data.error);
+                    isLiked = previousIsLiked;
+                    isDisliked = previousIsDisliked;
+                    likeButton.classList.toggle('active', previousIsLiked);
+                    dislikeButton.classList.toggle('active', previousIsDisliked);
+                    likeCount.textContent = currentLikes;
+                    dislikeCount.textContent = currentDislikes;
                 }
             })
             .catch(error => {
                 console.error('Error toggling dislike:', error);
-                // В случае ошибки возвращаем UI к прежнему состоянию
-                if (isActive) {
-                    dislikeButton.classList.add('active');
-                    dislikeCount.textContent = currentDislikes;
-                } else {
-                    dislikeButton.classList.remove('active');
-                    dislikeCount.textContent = Math.max(0, currentDislikes - 1);
-                }
+                isLiked = previousIsLiked;
+                isDisliked = previousIsDisliked;
+                likeButton.classList.toggle('active', previousIsLiked);
+                dislikeButton.classList.toggle('active', previousIsDisliked);
+                likeCount.textContent = currentLikes;
+                dislikeCount.textContent = currentDislikes;
             });
+        });
+
+        // Отслеживание просмотра (3 секунды)
+        function trackView() {
+            if (viewTracked) {
+                console.log('View already tracked for this session');
+                return;
+            }
+
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            const formData = new FormData();
+            formData.append('video_id', compositeId);
+            formData.append('user_id', userId);
+            formData.append('session_id', sessionId);
+
+            fetch('/api/track-view/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken },
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    viewTracked = true;
+                    viewsInfo.textContent = `${data.views} views • ${viewsInfo.textContent.split(' • ')[1]}`;
+                    console.log('View tracked:', { views: data.views, view_counted: data.view_counted });
+                } else {
+                    console.error('Error tracking view:', data.error);
+                }
+            })
+            .catch(error => console.error('Error tracking view:', error));
+        }
+
+        // Отслеживание времени просмотра
+        videoPlayer.addEventListener('play', function() {
+            if (!watchStartTime) {
+                watchStartTime = Date.now();
+                console.log('Video playback started');
+            }
+        });
+
+        videoPlayer.addEventListener('timeupdate', function() {
+            if (!viewTracked && watchStartTime) {
+                const elapsedTime = (Date.now() - watchStartTime) / 1000; // В секундах
+                if (elapsedTime >= 3) {
+                    trackView();
+                    console.log('3 seconds watched, tracking view');
+                }
+            }
+        });
+
+        videoPlayer.addEventListener('pause', function() {
+            console.log('Video paused');
+        });
+
+        videoPlayer.addEventListener('ended', function() {
+            console.log('Video ended');
         });
     });
 </script>
