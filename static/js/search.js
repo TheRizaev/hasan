@@ -126,55 +126,88 @@ function initializeHeaderSearch(searchInput, searchDropdown, searchButton) {
  * Получение результатов поиска
  */
 function fetchSearchResults(query, offset = 0, limit = 5) {
-    // Получаем все видео через API и фильтруем на стороне клиента
-    // Это временное решение, в будущем следует использовать API поиска
-    console.log(`Поиск: ${query}, offset=${offset}, limit=${limit}`);
+    // Log the search attempt
+    console.log(`Performing search for: "${query}", offset=${offset}, limit=${limit}`);
     
+    // Make request to list_all_videos API without any filtering
+    // We'll handle the filtering on client side to ensure results
     return fetch(`/api/list-all-videos/?offset=0&limit=100`)
         .then(response => {
             if (!response.ok) {
-                throw new Error(`Ошибка API: ${response.status}`);
+                throw new Error(`API Error: ${response.status}`);
             }
             return response.json();
         })
         .then(data => {
             if (!data.success || !data.videos) {
+                console.warn("API returned no videos or success=false", data);
                 return [];
             }
             
-            // Фильтруем видео по запросу
+            // Log the raw count of videos from API
+            console.log(`API returned ${data.videos.length} total videos`);
+            
+            // Convert query to lowercase for case-insensitive matching
             const queryLower = query.toLowerCase();
+            
+            // Filter videos by query with debugging
             const filteredVideos = data.videos.filter(video => {
+                // Check for necessary properties with fallbacks
                 const title = (video.title || '').toLowerCase();
                 const description = (video.description || '').toLowerCase();
                 const channel = (video.channel || video.display_name || video.user_id || '').toLowerCase();
                 
-                return title.includes(queryLower) || 
-                       description.includes(queryLower) || 
-                       channel.includes(queryLower);
+                // Check if any matches
+                const titleMatches = title.includes(queryLower);
+                const descriptionMatches = description.includes(queryLower);
+                const channelMatches = channel.includes(queryLower);
+                
+                // Debug individual video
+                if (titleMatches || descriptionMatches || channelMatches) {
+                    console.log(`Match found - Title: "${video.title}", matches: [title=${titleMatches}, desc=${descriptionMatches}, channel=${channelMatches}]`);
+                }
+                
+                // Return true if any field matches the query
+                return titleMatches || descriptionMatches || channelMatches;
             });
             
-            console.log(`Найдено ${filteredVideos.length} видео по запросу "${query}"`);
+            console.log(`Found ${filteredVideos.length} videos matching "${query}"`);
             
-            // Сортируем по релевантности
+            // If no videos found, log a warning with more details
+            if (filteredVideos.length === 0) {
+                console.warn(`No matches found for "${query}". Sample of available videos:`, 
+                    data.videos.slice(0, 3).map(v => ({
+                        title: v.title,
+                        user_id: v.user_id,
+                        video_id: v.video_id
+                    }))
+                );
+            }
+            
+            // Sort by relevance
             filteredVideos.sort((a, b) => {
                 const aTitle = (a.title || '').toLowerCase();
                 const bTitle = (b.title || '').toLowerCase();
                 
-                // Точное совпадение с заголовком идет первым
+                // Exact title match goes first
                 if (aTitle === queryLower && bTitle !== queryLower) return -1;
                 if (bTitle === queryLower && aTitle !== queryLower) return 1;
                 
-                // Заголовок начинается с запроса идет вторым
+                // Title starts with query goes second
                 if (aTitle.startsWith(queryLower) && !bTitle.startsWith(queryLower)) return -1;
                 if (bTitle.startsWith(queryLower) && !aTitle.startsWith(queryLower)) return 1;
                 
-                // По умолчанию - по дате загрузки (новые вначале)
+                // Default sort by upload date (newer first)
                 return new Date(b.upload_date || 0) - new Date(a.upload_date || 0);
             });
             
-            // Применяем пагинацию
+            // Apply pagination
             return filteredVideos.slice(offset, offset + limit);
+        })
+        .catch(error => {
+            console.error('Search API error:', error);
+            // Provide better error handling - return empty array but log error
+            return [];
         });
 }
 
