@@ -7,7 +7,7 @@
 {% block content %}
 <div class="video-page-layout">
     <div class="video-content">
-        <!-- Добавление CSRF-токена для защиты AJAX-запросов -->
+        <!-- Add CSRF token for AJAX requests -->
         {% csrf_token %}
         <div class="video-container" data-video-id="{{ video.gcs_id }}" data-user-id="{{ video.user_id }}">
             <div class="video-wrapper">
@@ -147,14 +147,29 @@
             <div class="video-info-bar">
                 <div class="views-info">{{ video.views_formatted }} • {{ video.upload_date_formatted|default:video.age }}</div>
                 <div class="actions-bar">
-                    <button class="action-button" id="likeButton"><span id="likeCount">{{ video.likes|default:"0" }}</span> <img src="/static/icons/like.svg" alt="Студия" width="20" height="20"> Нравиться</button>
-                    <button class="action-button" id="dislikeButton"><span id="dislikeCount">{{ video.dislikes|default:"0" }}</span><img src="/static/icons/dislike.svg" alt="Студия" width="20" height="20"> Не нравиться</button>
-                    <button class="action-button"><img src="/static/icons/share.svg" alt="Студия" width="20" height="20"> Поделиться</button>
+                    <button class="action-button" id="likeButton">
+                        <img src="/static/icons/like.svg" alt="Like" width="20" height="20">
+                        <span id="likeCount">{{ video.likes|default:"0" }}</span>
+                    </button>
+                    <button class="action-button" id="dislikeButton">
+                        <img src="/static/icons/dislike.svg" alt="Dislike" width="20" height="20">
+                        <span id="dislikeCount">{{ video.dislikes|default:"0" }}</span>
+                    </button>
+                    <button class="action-button" id="shareButton">
+                        <img src="/static/icons/share.svg" alt="Share" width="20" height="20">
+                        Поделиться
+                    </button>
                 </div>
             </div>
             
             <div class="channel-info">
-                <div class="channel-avatar">{{ video.display_name|default:video.channel|first }}</div>
+                <div class="channel-avatar">
+                    {% if video.avatar_url %}
+                        <img src="{{ video.avatar_url }}" alt="{{ video.display_name|default:video.channel }}">
+                    {% else %}
+                        {{ video.display_name|default:video.channel|first }}
+                    {% endif %}
+                </div>
                 <div class="channel-details">
                     <div class="channel-name">{{ video.display_name|default:video.channel }}</div>
                     <div class="subscribers">{{ video.subscribers|default:"0" }} подписчиков</div>
@@ -200,7 +215,7 @@
                             <div class="qa-text">{{ comment.text }}</div>
                             <div class="qa-meta">{{ comment.date|date:"d.m.Y" }}</div>
                             <div class="qa-actions">
-                                <button class="qa-like" data-liked="false"><img src="/static/icons/like.svg" alt="Студия" width="20" height="20"> <span>{{ comment.likes|default:"0" }}</span></button>
+                                <button class="qa-like" data-liked="false"><img src="/static/icons/like.svg" alt="Like" width="20" height="20"> <span>{{ comment.likes|default:"0" }}</span></button>
                                 <button class="qa-reply-btn" data-comment-id="{{ comment.id }}">Ответить</button>
                             </div>
                             
@@ -242,7 +257,7 @@
                                             <div class="qa-text">{{ reply.text }}</div>
                                             <div class="qa-meta">{{ reply.date|date:"d.m.Y" }}</div>
                                             <div class="qa-actions">
-                                                <button class="qa-like"><img src="/static/icons/like.svg" alt="Студия" width="20" height="20"> <span>{{ reply.likes|default:"0" }}</span></button>
+                                                <button class="qa-like"><img src="/static/icons/like.svg" alt="Like" width="20" height="20"> <span>{{ reply.likes|default:"0" }}</span></button>
                                                 <button class="qa-reply-to-reply-btn" data-comment-id="{{ comment.id }}" data-username="{{ reply.user_id }}">Ответить</button>
                                             </div>
                                         </div>
@@ -295,10 +310,303 @@
         </div>
     </div>
 </div>
+
+<style>
+/* Add CSS for like/dislike buttons */
+.action-button {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 10px 15px;
+    background-color: rgba(159, 37, 88, 0.1);
+    border: none;
+    border-radius: 20px;
+    color: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.action-button:hover {
+    background-color: rgba(159, 37, 88, 0.2);
+    transform: translateY(-2px);
+}
+
+.action-button.active {
+    background-color: var(--accent-color);
+    color: white;
+}
+
+.action-button.active img {
+    filter: brightness(0) invert(1);
+}
+
+/* Login prompt */
+.login-prompt {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: var(--light-bg);
+    border-radius: 15px;
+    padding: 20px 30px;
+    box-shadow: var(--bunny-shadow);
+    text-align: center;
+    z-index: 1000;
+    display: none;
+}
+
+.dark-theme .login-prompt {
+    background-color: var(--medium-bg);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.login-prompt a {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.login-prompt a:hover {
+    text-decoration: underline;
+}
+
+.login-prompt-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 999;
+    display: none;
+}
+
+.login-prompt.show, .login-prompt-backdrop.show {
+    display: block;
+}
+
+.login-prompt .close-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: var(--gray-color);
+    cursor: pointer;
+}
+
+.login-prompt .close-btn:hover {
+    color: var(--primary-color);
+}
+</style>
 {% endblock %}
 
 {% block scripts %}
 <script src="{% static 'js/kronik-player.js' %}"></script>
 <script src="{% static 'js/quality-change.js' %}"></script>
 <script src="{% static 'js/qa-comments.js' %}"></script>
+<script src="{% static 'js/video-sharing.js' %}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Получаем элементы
+        const likeButton = document.getElementById('likeButton');
+        const dislikeButton = document.getElementById('dislikeButton');
+        const likeCount = document.getElementById('likeCount');
+        const dislikeCount = document.getElementById('dislikeCount');
+        const videoContainer = document.querySelector('.video-container');
+        
+        if (!videoContainer || !likeButton || !dislikeButton) return;
+        
+        // Получаем информацию о видео
+        const videoId = videoContainer.getAttribute('data-video-id');
+        const userId = videoContainer.getAttribute('data-user-id');
+        const compositeId = `${userId}__${videoId}`;
+        
+        // Создаем окно для неавторизованных пользователей
+        function createLoginPrompt() {
+            const loginPrompt = document.createElement('div');
+            loginPrompt.className = 'login-prompt';
+            loginPrompt.innerHTML = `
+                <button class="close-btn">&times;</button>
+                <h3>Требуется авторизация</h3>
+                <p>Чтобы оценить видео, необходимо <a href="/login/?next=/video/${compositeId}/">войти</a> или <a href="/register/">зарегистрироваться</a>.</p>
+            `;
+            
+            const backdrop = document.createElement('div');
+            backdrop.className = 'login-prompt-backdrop';
+            
+            document.body.appendChild(loginPrompt);
+            document.body.appendChild(backdrop);
+            
+            // Кнопка закрытия
+            const closeBtn = loginPrompt.querySelector('.close-btn');
+            closeBtn.addEventListener('click', function() {
+                loginPrompt.classList.remove('show');
+                backdrop.classList.remove('show');
+            });
+            
+            // Закрытие при клике вне окна
+            backdrop.addEventListener('click', function() {
+                loginPrompt.classList.remove('show');
+                backdrop.classList.remove('show');
+            });
+            
+            return { loginPrompt, backdrop };
+        }
+        
+        // Создаем окно логина
+        const { loginPrompt, backdrop } = createLoginPrompt();
+        
+        // Функция для отображения окна логина
+        function showLoginPrompt() {
+            loginPrompt.classList.add('show');
+            backdrop.classList.add('show');
+        }
+        
+        // Проверяем статус лайка при загрузке страницы
+        fetch(`/api/video-like-status/${compositeId}/?user_id=${userId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    if (data.is_liked) {
+                        likeButton.classList.add('active');
+                    } else if (data.is_disliked) {
+                        dislikeButton.classList.add('active');
+                    }
+                }
+            })
+            .catch(error => console.error('Error fetching like status:', error));
+        
+        // Обработчик нажатия на кнопку лайка с мгновенной обратной связью
+        likeButton.addEventListener('click', function() {
+            // CSRF токен
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            
+            // Мгновенно обновляем интерфейс для лучшего UX
+            const isActive = likeButton.classList.contains('active');
+            const currentLikes = parseInt(likeCount.textContent);
+            const currentDislikes = parseInt(dislikeCount.textContent);
+            
+            if (isActive) {
+                // Убираем лайк
+                likeButton.classList.remove('active');
+                likeCount.textContent = Math.max(0, currentLikes - 1);
+            } else {
+                // Добавляем лайк
+                likeButton.classList.add('active');
+                dislikeButton.classList.remove('active');
+                likeCount.textContent = currentLikes + 1;
+                
+                // Если был дизлайк, уменьшаем счетчик дизлайков
+                if (dislikeButton.classList.contains('active')) {
+                    dislikeCount.textContent = Math.max(0, currentDislikes - 1);
+                }
+            }
+            
+            // Подготавливаем данные
+            const formData = new FormData();
+            formData.append('video_id', compositeId);
+            formData.append('user_id', userId);
+            
+            // Отправляем запрос на сервер (без ожидания ответа)
+            fetch('/api/toggle-video-like/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                },
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success && data.require_login) {
+                    // Отображаем окно логина для неавторизованных пользователей
+                    // Возвращаем интерфейс к исходному состоянию
+                    likeButton.classList.remove('active');
+                    dislikeButton.classList.remove('active');
+                    likeCount.textContent = data.likes || currentLikes;
+                    dislikeCount.textContent = data.dislikes || currentDislikes;
+                    showLoginPrompt();
+                }
+            })
+            .catch(error => {
+                console.error('Error toggling like:', error);
+                // В случае ошибки возвращаем UI к прежнему состоянию
+                if (isActive) {
+                    likeButton.classList.add('active');
+                    likeCount.textContent = currentLikes;
+                } else {
+                    likeButton.classList.remove('active');
+                    likeCount.textContent = Math.max(0, currentLikes - 1);
+                }
+            });
+        });
+        
+        // Обработчик нажатия на кнопку дизлайка с мгновенной обратной связью
+        dislikeButton.addEventListener('click', function() {
+            // CSRF токен
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            
+            // Мгновенно обновляем интерфейс для лучшего UX
+            const isActive = dislikeButton.classList.contains('active');
+            const currentLikes = parseInt(likeCount.textContent);
+            const currentDislikes = parseInt(dislikeCount.textContent);
+            
+            if (isActive) {
+                // Убираем дизлайк
+                dislikeButton.classList.remove('active');
+                dislikeCount.textContent = Math.max(0, currentDislikes - 1);
+            } else {
+                // Добавляем дизлайк
+                dislikeButton.classList.add('active');
+                likeButton.classList.remove('active');
+                dislikeCount.textContent = currentDislikes + 1;
+                
+                // Если был лайк, уменьшаем счетчик лайков
+                if (likeButton.classList.contains('active')) {
+                    likeCount.textContent = Math.max(0, currentLikes - 1);
+                }
+            }
+            
+            // Подготавливаем данные
+            const formData = new FormData();
+            formData.append('video_id', compositeId);
+            formData.append('user_id', userId);
+            
+            // Отправляем запрос на сервер (без ожидания ответа для мгновенной реакции)
+            fetch('/api/toggle-video-dislike/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                },
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success && data.require_login) {
+                    // Отображаем окно логина для неавторизованных пользователей
+                    // Возвращаем интерфейс к исходному состоянию
+                    likeButton.classList.remove('active');
+                    dislikeButton.classList.remove('active');
+                    likeCount.textContent = data.likes || currentLikes;
+                    dislikeCount.textContent = data.dislikes || currentDislikes;
+                    showLoginPrompt();
+                }
+            })
+            .catch(error => {
+                console.error('Error toggling dislike:', error);
+                // В случае ошибки возвращаем UI к прежнему состоянию
+                if (isActive) {
+                    dislikeButton.classList.add('active');
+                    dislikeCount.textContent = currentDislikes;
+                } else {
+                    dislikeButton.classList.remove('active');
+                    dislikeCount.textContent = Math.max(0, currentDislikes - 1);
+                }
+            });
+        });
+    });
+</script>
 {% endblock %}
