@@ -430,7 +430,7 @@
                     window.location.href = `/channel/${subscription.channel_id}/`;
                 };
                 
-                // Determine avatar content
+                // Determine avatar content - use avatar_url if available
                 let avatarContent = '';
                 if (subscription.avatar_url) {
                     avatarContent = `<img src="${subscription.avatar_url}" alt="${subscription.display_name}">`;

@@ -453,9 +453,32 @@ document.addEventListener('DOMContentLoaded', function() {
             };
             
             const thumbnailUrl = video.thumbnail_url || '/static/placeholder.jpg';
-            const avatarContent = video.avatar_url ? 
-                `<img src="${video.avatar_url}" alt="${video.display_name || video.channel}" loading="lazy">` : 
-                `<span class="avatar-text">${video.display_name ? video.display_name.charAt(0) : (video.channel ? video.channel.charAt(0) : '')}</span>`;
+            
+            // Improved avatar content generation with proper handling
+            let avatarContent = '';
+            if (video.avatar_url) {
+                // Use actual avatar image if available
+                avatarContent = `<img src="${video.avatar_url}" alt="${video.display_name || video.channel}" loading="lazy">`;
+            } else {
+                // Otherwise use initial
+                const displayName = video.display_name || video.channel || '';
+                avatarContent = `<span class="avatar-text">${displayName.charAt(0)}</span>`;
+                
+                // Also attempt to load avatar asynchronously
+                setTimeout(() => {
+                    fetch(`/api/get-user-profile/?user_id=${encodeURIComponent(video.user_id)}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success && data.profile && data.profile.avatar_url) {
+                                const avatarElem = resultItem.querySelector('.avatar-medium');
+                                if (avatarElem) {
+                                    avatarElem.innerHTML = `<img src="${data.profile.avatar_url}" alt="${video.display_name || video.channel}" loading="lazy">`;
+                                }
+                            }
+                        })
+                        .catch(err => console.error('Error loading avatar:', err));
+                }, 100);
+            }
             
             resultItem.innerHTML = `
                 <div class="result-thumbnail">
@@ -477,6 +500,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             searchResultsContainer.appendChild(resultItem);
         });
+        
+        // Initialize lazy loading for thumbnails
+        initializeLazyLoading();
     }
     
     const filterItems = document.querySelectorAll('.filter-item');

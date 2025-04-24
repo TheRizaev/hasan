@@ -201,8 +201,8 @@
             <div class="comment-form" id="qa-form">
                 <div class="avatar">
                     {% if user.is_authenticated %}
-                        {% if user.profile.avatar_url %}
-                            <img src="{{ user.profile.avatar_url }}" alt="{{ user.profile.display_name|default:user.username }}" loading="lazy">
+                        {% if user_avatar_url %}
+                            <img src="{{ user_avatar_url }}" alt="{{ user.profile.display_name|default:user.username }}" loading="lazy">
                         {% else %}
                             <span class="avatar-text">{% if user.profile.display_name %}{{ user.profile.display_name|first }}{% else %}{{ user.username|first }}{% endif %}</span>
                         {% endif %}
@@ -223,7 +223,7 @@
             <div class="qa-list" id="qa-list">
                 {% if comments %}
                     {% for comment in comments %}
-                    <div class="qa-item" data-comment-id="{{ comment.id }}">
+                    <div class="qa-item" data-comment-id="{{ comment.id }}" data-user-id="{{ comment.user_id }}">
                         <div class="avatar {% if comment.user_id == video.user_id %}author-avatar{% endif %}">
                             {% if comment.avatar_url %}
                                 <img src="{{ comment.avatar_url }}" alt="{{ comment.display_name }}" loading="lazy">
@@ -232,7 +232,7 @@
                             {% endif %}
                         </div>
                         <div class="qa-content">
-                            <div class="qa-author {% if comment.user_id == video.user_id %}is-author{% endif %}">
+                            <div class="qa-author {% if comment.user_id == video.user_id %}is-author{% endif %}" data-username="{{ comment.user_id }}">
                                 {{ comment.display_name }} 
                                 {% if comment.user_id == video.user_id %}<span class="author-badge">Автор</span>{% endif %}
                             </div>
@@ -246,8 +246,8 @@
                             <div class="reply-form" id="reply-form-{{ comment.id }}" style="display: none;">
                                 <div class="avatar">
                                     {% if user.is_authenticated %}
-                                        {% if user.profile.avatar_url %}
-                                            <img src="{{ user.profile.avatar_url }}" alt="{{ user.profile.display_name|default:user.username }}" loading="lazy">
+                                        {% if user_avatar_url %}
+                                            <img src="{{ user_avatar_url }}" alt="{{ user.profile.display_name|default:user.username }}" loading="lazy">
                                         {% else %}
                                             <span class="avatar-text">{% if user.profile.display_name %}{{ user.profile.display_name|first }}{% else %}{{ user.username|first }}{% endif %}</span>
                                         {% endif %}
@@ -1039,6 +1039,219 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
+
+    function loadCommentAvatars() {
+        const avatarPlaceholders = document.querySelectorAll('.qa-item .avatar .avatar-text, .qa-reply .avatar .avatar-text');
+        
+        avatarPlaceholders.forEach(placeholder => {
+            const commentElement = placeholder.closest('.qa-item') || placeholder.closest('.qa-reply');
+            const userId = commentElement.getAttribute('data-user-id');
+            
+            if (userId) {
+                // Try to get avatar URL from user profile
+                fetch(`/api/get-user-profile/?user_id=${encodeURIComponent(userId)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.profile && data.profile.avatar_url) {
+                            // Replace placeholder with actual image
+                            const avatarContainer = placeholder.parentElement;
+                            const img = document.createElement('img');
+                            img.src = data.profile.avatar_url;
+                            img.alt = commentElement.querySelector('.qa-author').textContent.trim();
+                            img.loading = "lazy";
+                            
+                            // Remove placeholder and add image
+                            placeholder.remove();
+                            avatarContainer.appendChild(img);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading comment avatar:', error);
+                    });
+            }
+        });
+    }
+    
+    // Call the function after page load
+    setTimeout(loadCommentAvatars, 100);
+    
+    // Enhanced version of createCommentElement function
+    function createCommentElement(comment) {
+        const isAuthor = comment.user_id === videoUserId;
+        
+        const div = document.createElement('div');
+        div.className = 'qa-item';
+        div.setAttribute('data-comment-id', comment.id);
+        div.setAttribute('data-user-id', comment.user_id);
+        
+        const displayName = comment.display_name || 'User';
+        const firstLetter = displayName.charAt(0);
+        
+        // Format date in a user-friendly way
+        const date = new Date(comment.date);
+        const formattedDate = formatDate(date);
+        
+        // Determine avatar content - either image or first letter
+        let avatarContent = '';
+        if (comment.avatar_url) {
+            avatarContent = `<img src="${comment.avatar_url}" alt="${displayName}">`;
+        } else {
+            avatarContent = `<span class="avatar-text">${firstLetter}</span>`;
+            
+            // Set a timer to try and load the actual avatar
+            setTimeout(() => {
+                fetch(`/api/get-user-profile/?user_id=${encodeURIComponent(comment.user_id)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.profile && data.profile.avatar_url) {
+                            const avatarContainer = div.querySelector('.avatar');
+                            if (avatarContainer) {
+                                avatarContainer.innerHTML = `<img src="${data.profile.avatar_url}" alt="${displayName}">`;
+                            }
+                        }
+                    })
+                    .catch(err => console.error('Error loading avatar for new comment:', err));
+            }, 200);
+        }
+        
+        // Get current user initial for reply form
+        const currentUserInitial = getCurrentUserInitial();
+        // Get current user avatar for reply form
+        const currentUserAvatar = getCurrentUserAvatar();
+        
+        div.innerHTML = `
+            <div class="avatar ${isAuthor ? 'author-avatar' : ''}">
+                ${avatarContent}
+            </div>
+            <div class="qa-content">
+                <div class="qa-author ${isAuthor ? 'is-author' : ''}" data-username="${username}">
+                    ${displayName}
+                    ${isAuthor ? '<span class="author-badge">Автор</span>' : ''}
+                </div>
+                <div class="qa-text">${replyText}</div>
+                <div class="qa-meta">${formattedDate}</div>
+                <div class="qa-actions">
+                    <button class="qa-like" data-liked="false"><img src="/static/icons/like.svg" alt="Like" width="20" height="20"> <span>${reply.likes || 0}</span></button>
+                    <button class="qa-reply-to-reply-btn" data-comment-id="${parentCommentId || ''}" data-username="${username}">Ответить</button>
+                </div>
+            </div>
+        `;
+        
+        return div;
+    }
+
+    // Helper function to get current user avatar HTML
+    function getCurrentUserAvatar() {
+        // Check if there's a current user avatar in the page
+        const commentForm = document.getElementById('qa-form');
+        if (commentForm) {
+            const avatarContainer = commentForm.querySelector('.avatar');
+            if (avatarContainer) {
+                return avatarContainer.innerHTML;
+            }
+        }
+        
+        // Fallback to initial
+        return '<span class="avatar-text">A</span>';
+    }
+
+    // Helper function to get current user initial
+    function getCurrentUserInitial() {
+        const commentForm = document.getElementById('qa-form');
+        if (commentForm) {
+            const avatarText = commentForm.querySelector('.avatar-text');
+            if (avatarText) {
+                return avatarText.textContent;
+            }
+        }
+        return 'A';
+    }
+    
+    // Load channel avatar if not already loaded
+    function loadChannelAvatar() {
+        const channelAvatar = document.querySelector('.channel-info .avatar');
+        if (channelAvatar && !channelAvatar.querySelector('img')) {
+            const videoContainer = document.querySelector('.video-container');
+            if (videoContainer) {
+                const userId = videoContainer.getAttribute('data-user-id');
+                if (userId) {
+                    fetch(`/api/get-user-profile/?user_id=${encodeURIComponent(userId)}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success && data.profile && data.profile.avatar_url) {
+                                channelAvatar.innerHTML = `<img src="${data.profile.avatar_url}" alt="${data.profile.display_name || userId}" loading="lazy">`;
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error loading channel avatar:', error);
+                        });
+                }
+            }
+        }
+    }
+    
+    // Call the function to load channel avatar
+    loadChannelAvatar();
+    
+    // Load related videos avatars
+    function loadRelatedAvatars() {
+        const relatedVideos = document.querySelectorAll('.related-video-card');
+        relatedVideos.forEach(video => {
+            const channelNameElement = video.querySelector('.related-channel');
+            if (channelNameElement) {
+                // Extract user ID from the card's onclick handler
+                const onclickValue = video.getAttribute('onclick') || '';
+                const match = onclickValue.match(/\/video\/([^\/]+)__/);
+                if (match && match[1]) {
+                    const userId = match[1];
+                    
+                    // Try to load avatar
+                    fetch(`/api/get-user-profile/?user_id=${encodeURIComponent(userId)}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success && data.profile && data.profile.avatar_url) {
+                                // Check if there's already an avatar container
+                                let avatarContainer = video.querySelector('.related-avatar');
+                                if (!avatarContainer) {
+                                    // Create avatar container if it doesn't exist
+                                    avatarContainer = document.createElement('div');
+                                    avatarContainer.className = 'related-avatar';
+                                    channelNameElement.parentNode.insertBefore(avatarContainer, channelNameElement);
+                                }
+                                
+                                avatarContainer.innerHTML = `<img src="${data.profile.avatar_url}" alt="${data.profile.display_name || userId}" width="20" height="20" loading="lazy">`;
+                                
+                                // Add avatar style
+                                const style = document.createElement('style');
+                                style.textContent = `
+                                    .related-avatar {
+                                        width: 20px;
+                                        height: 20px;
+                                        border-radius: 50%;
+                                        overflow: hidden;
+                                        margin-right: 8px;
+                                        display: inline-flex;
+                                        vertical-align: middle;
+                                    }
+                                    .related-avatar img {
+                                        width: 100%;
+                                        height: 100%;
+                                        object-fit: cover;
+                                    }
+                                `;
+                                document.head.appendChild(style);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error loading related video avatar:', error);
+                        });
+                }
+            }
+        });
+    }
+    
+    // Call the function to load related videos avatars
+    setTimeout(loadRelatedAvatars, 300);
 });
 </script>
 {% endblock %}

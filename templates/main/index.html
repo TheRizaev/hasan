@@ -148,7 +148,57 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const lazyThumbnails = document.querySelectorAll('.lazy-load-thumbnail');
-    
+    function loadChannelAvatars() {
+        const avatarContainers = document.querySelectorAll('.avatar-small');
+        
+        if ('IntersectionObserver' in window) {
+            const avatarObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const avatarContainer = entry.target;
+                        const avatarPlaceholder = avatarContainer.querySelector('.avatar-text');
+                        
+                        // Only proceed if we have a placeholder (no image loaded yet)
+                        if (avatarPlaceholder) {
+                            const userId = avatarContainer.closest('.video-card').getAttribute('data-user-id');
+                            if (userId) {
+                                // Try to get avatar from user profile
+                                fetch(`/api/get-user-profile/?user_id=${encodeURIComponent(userId)}`)
+                                    .then(response => response.json())
+                                    .then(data => {
+                                        if (data.success && data.profile && data.profile.avatar_url) {
+                                            // Create image and replace placeholder
+                                            const img = document.createElement('img');
+                                            img.src = data.profile.avatar_url;
+                                            img.alt = data.profile.display_name || userId;
+                                            img.loading = "lazy";
+                                            
+                                            // Replace placeholder with actual image
+                                            avatarPlaceholder.replaceWith(img);
+                                        }
+                                    })
+                                    .catch(error => {
+                                        console.error('Error loading avatar:', error);
+                                    });
+                                
+                                // Stop observing this avatar
+                                avatarObserver.unobserve(avatarContainer);
+                            }
+                        }
+                    }
+                });
+            }, {
+                rootMargin: '200px 0px',
+                threshold: 0.01
+            });
+            
+            // Observe all avatar containers
+            avatarContainers.forEach(container => {
+                avatarObserver.observe(container);
+            });
+        }
+    }
+    loadChannelAvatars();
     if (lazyThumbnails.length > 0) {
         console.log(`Initializing lazy loading for ${lazyThumbnails.length} thumbnails`);
         

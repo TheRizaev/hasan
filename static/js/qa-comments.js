@@ -905,11 +905,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const div = document.createElement('div');
         div.className = 'qa-reply';
         div.setAttribute('data-reply-id', reply.id);
-        div.setAttribute('data-user-id', reply.user_id); // Store user_id for referencing
+        div.setAttribute('data-user-id', reply.user_id);
         
-        const displayName = reply.display_name || 'User';
-        const username = reply.user_id || 'user'; // Get actual username for @mentions
-        const firstLetter = displayName.charAt(0);
+        const displayName = reply.display_name || reply.user_id || 'User';
+        const username = reply.user_id || 'user';
+        const firstLetter = displayName.charAt(0).toUpperCase();
         
         // Format date
         const date = new Date(reply.date);
@@ -918,15 +918,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // Determine avatar content - either image or first letter
         let avatarContent = '';
         if (reply.avatar_url) {
-            avatarContent = `<img src="${reply.avatar_url}" alt="${displayName}">`;
+            avatarContent = `<img src="${reply.avatar_url}" alt="${displayName}" loading="lazy">`;
         } else {
-            avatarContent = firstLetter;
+            avatarContent = `<span class="avatar-text">${firstLetter}</span>`;
         }
         
         // Process text to handle @username replies
         let replyText = reply.text;
         if (replyText.startsWith('@')) {
-            // Format @username mentions with a highlight
             const parts = replyText.split(' ');
             if (parts.length > 0 && parts[0].startsWith('@')) {
                 const mention = parts[0];
@@ -934,11 +933,10 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // We need to get the parent comment ID from the calling context
-        const parentCommentId = reply.parentCommentId; // This will be set by addReplyToComment
+        const parentCommentId = reply.parentCommentId || '';
         
         div.innerHTML = `
-            <div class="user-avatar ${isAuthor ? 'author-avatar' : ''}">
+            <div class="avatar avatar-medium ${isAuthor ? 'author-avatar' : ''}">
                 ${avatarContent}
             </div>
             <div class="qa-content">
@@ -949,11 +947,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="qa-text">${replyText}</div>
                 <div class="qa-meta">${formattedDate}</div>
                 <div class="qa-actions">
-                    <button class="qa-like" data-liked="false">👍 <span>${reply.likes || 0}</span></button>
-                    <button class="qa-reply-to-reply-btn" data-comment-id="${parentCommentId || ''}" data-username="${username}">Ответить</button>
+                    <button class="qa-like" data-liked="false"><img src="/static/icons/like.svg" alt="Like" width="20" height="20"> <span>${reply.likes || 0}</span></button>
+                    <button class="qa-reply-to-reply-btn" data-comment-id="${parentCommentId}" data-username="${username}">Ответить</button>
                 </div>
             </div>
         `;
+        
+        // Try to load avatar dynamically if not provided
+        if (!reply.avatar_url && reply.user_id) {
+            setTimeout(() => {
+                fetch(`/api/get-user-profile/?user_id=${encodeURIComponent(reply.user_id)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.profile && data.profile.avatar_url) {
+                            const avatarContainer = div.querySelector('.avatar');
+                            if (avatarContainer) {
+                                avatarContainer.innerHTML = `<img src="${data.profile.avatar_url}" alt="${displayName}" loading="lazy">`;
+                            }
+                        }
+                    })
+                    .catch(err => console.error('Error loading avatar for reply:', err));
+            }, 200);
+        }
         
         return div;
     }
