@@ -1,5 +1,3 @@
-# main/urls.py
-
 from django.urls import path
 from . import views
 from . import gcs_views 
@@ -34,6 +32,9 @@ urlpatterns = [
     path('api/add-comment/', gcs_views.add_comment, name='add_comment'),
     path('api/add-reply/', gcs_views.add_reply, name='add_reply'),
     path('api/track-view/', gcs_views.track_video_view, name='track_video_view'),
+    
+    # New endpoint for getting user profiles with avatar
+    path('api/get-user-profile/', views.get_user_profile, name='get_user_profile'),
     
     # New endpoints for like/dislike functionality
     path('api/toggle-video-like/', views.toggle_video_like, name='toggle_video_like'),

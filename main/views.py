@@ -1551,3 +1551,34 @@ def channel_view(request, username):
         
         messages.error(request, f'Ошибка при загрузке информации о канале: {e}')
         return redirect('index')
+
+def get_user_profile(request):
+    """
+    API endpoint to retrieve a user's profile information including avatar URL
+    
+    Parameters:
+    - user_id: The ID of the user to retrieve profile for
+    
+    Returns:
+    - JSON response with profile information
+    """
+    try:
+        user_id = request.GET.get('user_id')
+        
+        if not user_id:
+            return JsonResponse({'success': False, 'error': 'Missing user_id parameter'}, status=400)
+            
+        # Get profile from GCS
+        from .gcs_storage import get_user_profile_from_gcs
+        profile = get_user_profile_from_gcs(user_id)
+        
+        if not profile:
+            return JsonResponse({'success': False, 'error': 'User profile not found'}, status=404)
+            
+        return JsonResponse({
+            'success': True,
+            'profile': profile
+        })
+    except Exception as e:
+        logger.error(f"Error getting user profile: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
