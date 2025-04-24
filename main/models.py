@@ -91,6 +91,22 @@ class VideoView(models.Model):
             ('session_id', 'video_id', 'video_owner'),  # Уникальность для неавторизованных
         ]
     
+class Subscription(models.Model):
+    """
+    Model to track user subscriptions to channels
+    """
+    subscriber = models.ForeignKey(User, on_delete=models.CASCADE, related_name='subscriptions')
+    channel_id = models.CharField(max_length=255)  # User ID (with @ prefix) of the channel/author
+    subscribed_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ('subscriber', 'channel_id')
+        verbose_name = 'Subscription'
+        verbose_name_plural = 'Subscriptions'
+        
+    def __str__(self):
+        return f"{self.subscriber.username} subscribed to {self.channel_id}"    
+
 # Add new model for expertise areas
 class ExpertiseArea(models.Model):
     name = models.CharField(max_length=100)

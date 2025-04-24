@@ -7,7 +7,6 @@
 {% block content %}
 <div class="video-page-layout">
     <div class="video-content">
-        <!-- Add CSRF token for AJAX requests -->
         {% csrf_token %}
         <div class="video-container" data-video-id="{{ video.gcs_id }}" data-user-id="{{ video.user_id }}">
             <div class="video-wrapper">
@@ -163,29 +162,54 @@
             </div>
             
             <div class="channel-info">
-                <a href="{% url 'channel' username=video.user_id %}" class="channel-avatar">
+                <a href="{% url 'channel' username=video.user_id %}" class="avatar avatar-large">
                     {% if video.avatar_url %}
-                        <img src="{{ video.avatar_url }}" alt="{{ video.display_name|default:video.channel }}">
+                        <img src="{{ video.avatar_url }}" alt="{{ video.display_name|default:video.channel }}" loading="lazy">
                     {% else %}
-                        {{ video.display_name|default:video.channel|first }}
+                        <span class="avatar-text">{{ video.display_name|first|default:video.channel|first }}</span>
                     {% endif %}
                 </a>
                 <div class="channel-details">
                     <a href="{% url 'channel' username=video.user_id %}" class="channel-name">{{ video.display_name|default:video.channel }}</a>
-                    <div class="subscribers">{{ video.subscribers|default:"0" }} подписчиков</div>
+                    <div class="subscribers"><span id="subscriber-count">{{ video.subscribers|default:"0" }}</span> подписчиков</div>
                 </div>
-                <button class="subscribe-button">Подписаться</button>
+                {% if user.is_authenticated and user.username != video.user_id %}
+                <button class="subscribe-button" data-channel-id="{{ video.user_id }}">Подписаться</button>
+                {% elif not user.is_authenticated %}
+                <button class="subscribe-button" onclick="showLoginPrompt()">Подписаться</button>
+                {% endif %}
             </div>
             
             <div class="video-description">
                 <p>{{ video.description|default:"Описание видео отсутствует." }}</p>
             </div>
         </div>
+
+        <div class="unsubscribe-dialog" id="unsubscribe-dialog">
+            <div class="unsubscribe-dialog-content">
+                <h3>Отписаться от канала</h3>
+                <p>Вы точно хотите отписаться от автора <strong id="unsubscribe-channel-name">{{ video.display_name|default:video.channel }}</strong>?</p>
+                <div class="unsubscribe-dialog-buttons">
+                    <button id="confirm-unsubscribe" class="confirm-unsubscribe-btn">Отписаться</button>
+                    <button id="cancel-unsubscribe" class="cancel-unsubscribe-btn">Отмена</button>
+                </div>
+            </div>
+        </div>
                 
         <div class="qa-section">
             <h2>Вопросы и обсуждение</h2>
             <div class="comment-form" id="qa-form">
-                <div class="user-avatar">{% if user.is_authenticated %}{% if user.profile.display_name %}{{ user.profile.display_name|first }}{% else %}{{ user.username|first }}{% endif %}{% else %}Г{% endif %}</div>
+                <div class="avatar">
+                    {% if user.is_authenticated %}
+                        {% if user.profile.avatar_url %}
+                            <img src="{{ user.profile.avatar_url }}" alt="{{ user.profile.display_name|default:user.username }}" loading="lazy">
+                        {% else %}
+                            <span class="avatar-text">{% if user.profile.display_name %}{{ user.profile.display_name|first }}{% else %}{{ user.username|first }}{% endif %}</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="avatar-text">Г</span>
+                    {% endif %}
+                </div>
                 <input type="text" id="qa-input" placeholder="{% if user.is_authenticated %}Задайте вопрос или оставьте комментарий...{% else %}Войдите, чтобы задать вопрос{% endif %}" {% if not user.is_authenticated %}disabled{% endif %}>
                 <button id="qa-submit" class="qa-submit" {% if not user.is_authenticated %}disabled{% endif %}>Отправить</button>
             </div>
@@ -200,11 +224,11 @@
                 {% if comments %}
                     {% for comment in comments %}
                     <div class="qa-item" data-comment-id="{{ comment.id }}">
-                        <div class="user-avatar {% if comment.user_id == video.user_id %}author-avatar{% endif %}">
+                        <div class="avatar {% if comment.user_id == video.user_id %}author-avatar{% endif %}">
                             {% if comment.avatar_url %}
-                                <img src="{{ comment.avatar_url }}" alt="{{ comment.display_name }}">
+                                <img src="{{ comment.avatar_url }}" alt="{{ comment.display_name }}" loading="lazy">
                             {% else %}
-                                {{ comment.display_name|first }}
+                                <span class="avatar-text">{{ comment.display_name|first }}</span>
                             {% endif %}
                         </div>
                         <div class="qa-content">
@@ -219,17 +243,16 @@
                                 <button class="qa-reply-btn" data-comment-id="{{ comment.id }}">Ответить</button>
                             </div>
                             
-                            <!-- Reply form (initially hidden) -->
                             <div class="reply-form" id="reply-form-{{ comment.id }}" style="display: none;">
-                                <div class="user-avatar">
+                                <div class="avatar">
                                     {% if user.is_authenticated %}
-                                        {% if user_avatar_url %}
-                                            <img src="{{ user_avatar_url }}" alt="{{ user.profile.display_name|default:user.username }}">
+                                        {% if user.profile.avatar_url %}
+                                            <img src="{{ user.profile.avatar_url }}" alt="{{ user.profile.display_name|default:user.username }}" loading="lazy">
                                         {% else %}
-                                            {% if user.profile.display_name %}{{ user.profile.display_name|first }}{% else %}{{ user.username|first }}{% endif %}
+                                            <span class="avatar-text">{% if user.profile.display_name %}{{ user.profile.display_name|first }}{% else %}{{ user.username|first }}{% endif %}</span>
                                         {% endif %}
                                     {% else %}
-                                            <img src="{% static 'default-avatar.png' %}" alt="Г" width="40" height="40">
+                                        <span class="avatar-text">Г</span>
                                     {% endif %}
                                 </div>
                                 <input type="text" id="reply-input-{{ comment.id }}" placeholder="{% if user.is_authenticated %}Ответить на вопрос...{% else %}Войдите, чтобы ответить{% endif %}" {% if not user.is_authenticated %}disabled{% endif %}>
@@ -242,11 +265,11 @@
                                 <div class="qa-replies" style="display: none;">
                                     {% for reply in comment.replies %}
                                     <div class="qa-reply" data-user-id="{{ reply.user_id }}">
-                                        <div class="user-avatar {% if reply.user_id == video.user_id %}author-avatar{% endif %}">
+                                        <div class="avatar {% if reply.user_id == video.user_id %}author-avatar{% endif %}">
                                             {% if reply.avatar_url %}
-                                                <img src="{{ reply.avatar_url }}" alt="{{ reply.display_name }}">
+                                                <img src="{{ reply.avatar_url }}" alt="{{ reply.display_name }}" loading="lazy">
                                             {% else %}
-                                                {{ reply.display_name|first }}
+                                                <span class="avatar-text">{{ reply.display_name|first }}</span>
                                             {% endif %}
                                         </div>
                                         <div class="qa-content">
@@ -272,7 +295,7 @@
                     {% endfor %}
                 {% else %}
                     <div class="no-qa">
-                        <div class="user-avatar">К</div>
+                        <div class="avatar">К</div>
                         <div class="qa-content">
                             <div class="qa-author">KRONIK</div>
                             <div class="qa-text">Пока никто не задал вопрос. Будьте первым!</div>
@@ -292,9 +315,9 @@
                 <div class="related-video-card" onclick="window.location.href='{{ video.url }}'">
                     <div class="related-thumbnail">
                         {% if video.thumbnail_url %}
-                        <img src="{{ video.thumbnail_url }}" alt="{{ video.title }}" onerror="this.src='{% static 'placeholder.jpg' %}'">
+                        <img src="{{ video.thumbnail_url }}" alt="{{ video.title }}" loading="lazy" onerror="this.src='{% static 'placeholder.jpg' %}'">
                         {% else %}
-                        <img src="{% static 'placeholder.jpg' %}" alt="{{ video.title }}">
+                        <img src="{% static 'placeholder.jpg' %}" alt="{{ video.title }}" loading="lazy">
                         {% endif %}
                     </div>
                     <div class="related-info">
@@ -312,9 +335,59 @@
 </div>
 
 <style>
-/* Add CSS for like/dislike buttons */
+/* Common avatar styles */
+.avatar {
+    border-radius: 50%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--accent-color);
+    color: white;
+    font-weight: bold;
+    flex-shrink: 0;
+    text-decoration: none;
+    transition: transform 0.3s;
+}
+
+.avatar:hover {
+    transform: scale(1.05);
+}
+
+.avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.avatar-text {
+    font-size: 0.6em;
+    text-transform: uppercase;
+}
+
+.avatar-large {
+    width: 50px;
+    height: 50px;
+}
+
+.avatar-small {
+    width: 24px;
+    height: 24px;
+}
+
+.avatar-medium {
+    width: 40px;
+    height: 40px;
+}
+
+.author-avatar {
+    background-color: #ffd700;
+    color: #000;
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+/* Action button styles */
 .action-button {
-    position: relative;
     display: flex;
     align-items: center;
     gap: 5px;
@@ -322,7 +395,7 @@
     background-color: rgba(159, 37, 88, 0.1);
     border: none;
     border-radius: 20px;
-    color: inherit;
+    color: var(--text-light);
     font-weight: 500;
     cursor: pointer;
     transition: all 0.3s;
@@ -342,7 +415,7 @@
     filter: brightness(0) invert(1);
 }
 
-/* Enhanced channel info styling */
+/* Channel info styles */
 .channel-info {
     display: flex;
     align-items: center;
@@ -350,34 +423,6 @@
     border-top: 1px solid rgba(159, 37, 88, 0.1);
     border-bottom: 1px solid rgba(159, 37, 88, 0.1);
     margin: 15px 0;
-}
-
-.channel-avatar {
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    overflow: hidden;
-    margin-right: 15px;
-    background-color: var(--accent-color);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-weight: bold;
-    font-size: 20px;
-    flex-shrink: 0;
-    text-decoration: none;
-    transition: transform 0.3s;
-}
-
-.channel-avatar:hover {
-    transform: scale(1.05);
-}
-
-.channel-avatar img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
 }
 
 .channel-details {
@@ -427,6 +472,7 @@
 .subscribe-button.subscribed {
     background-color: #333;
 }
+
 /* Login prompt */
 .login-prompt {
     position: fixed;
@@ -436,7 +482,7 @@
     background-color: var(--light-bg);
     border-radius: 15px;
     padding: 20px 30px;
-    box-shadow: var(--bunny-shadow);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
     text-align: center;
     z-index: 1000;
     display: none;
@@ -486,6 +532,94 @@
 .login-prompt .close-btn:hover {
     color: var(--primary-color);
 }
+
+/* Unsubscribe dialog */
+.unsubscribe-dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.unsubscribe-dialog.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.unsubscribe-dialog-content {
+    background-color: var(--light-bg);
+    border-radius: 15px;
+    padding: 25px;
+    max-width: 90%;
+    width: 450px;
+    text-align: center;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.dark-theme .unsubscribe-dialog-content {
+    background-color: var(--medium-bg);
+}
+
+.unsubscribe-dialog h3 {
+    color: var(--primary-color);
+    margin-bottom: 15px;
+}
+
+.unsubscribe-dialog p {
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+
+.unsubscribe-dialog-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+}
+
+.confirm-unsubscribe-btn, .cancel-unsubscribe-btn {
+    padding: 10px 20px;
+    border-radius: 30px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.confirm-unsubscribe-btn {
+    background-color: #ff4757;
+    color: white;
+    border: none;
+    box-shadow: 0 3px 10px rgba(255, 71, 87, 0.3);
+}
+
+.confirm-unsubscribe-btn:hover {
+    background-color: #e3263c;
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(255, 71, 87, 0.4);
+}
+
+.cancel-unsubscribe-btn {
+    background-color: transparent;
+    color: var(--text-dark);
+    border: 2px solid var(--gray-color);
+}
+
+.dark-theme .cancel-unsubscribe-btn {
+    color: var(--text-light);
+}
+
+.cancel-unsubscribe-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    transform: translateY(-3px);
+}
 </style>
 {% endblock %}
 
@@ -495,337 +629,416 @@
 <script src="{% static 'js/qa-comments.js' %}"></script>
 <script src="{% static 'js/video-sharing.js' %}"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const likeButton = document.getElementById('likeButton');
-        const dislikeButton = document.getElementById('dislikeButton');
-        const likeCount = document.getElementById('likeCount');
-        const dislikeCount = document.getElementById('dislikeCount');
-        const videoContainer = document.querySelector('.video-container');
-        const videoPlayer = document.getElementById('video-player');
-        const viewsInfo = document.querySelector('.views-info');
+document.addEventListener('DOMContentLoaded', function() {
+    const likeButton = document.getElementById('likeButton');
+    const dislikeButton = document.getElementById('dislikeButton');
+    const likeCount = document.getElementById('likeCount');
+    const dislikeCount = document.getElementById('dislikeCount');
+    const videoContainer = document.querySelector('.video-container');
+    const videoPlayer = document.getElementById('video-player');
+    const viewsInfo = document.querySelector('.views-info');
 
-        if (!videoContainer || !likeButton || !dislikeButton || !videoPlayer || !viewsInfo) {
-            console.error('Required elements not found');
-            return;
-        }
+    if (!videoContainer || !likeButton || !dislikeButton || !videoPlayer || !viewsInfo) {
+        console.error('Required elements not found');
+        return;
+    }
 
-        const videoId = videoContainer.getAttribute('data-video-id');
-        const userId = videoContainer.getAttribute('data-user-id');
-        const compositeId = `${userId}__${videoId}`;
-        let isLiked = false;
-        let isDisliked = false;
-        let viewTracked = false;
-        let watchStartTime = null;
+    const videoId = videoContainer.getAttribute('data-video-id');
+    const userId = videoContainer.getAttribute('data-user-id');
+    const compositeId = `${userId}__${videoId}`;
+    let isLiked = false;
+    let isDisliked = false;
+    let viewTracked = false;
+    let watchStartTime = null;
 
-        // Генерация или получение session_id для неавторизованных пользователей
-        let sessionId = localStorage.getItem('session_id');
-        if (!sessionId) {
-            sessionId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-                const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-                return v.toString(16);
-            });
-            localStorage.setItem('session_id', sessionId);
-        }
+    let sessionId = localStorage.getItem('session_id');
+    if (!sessionId) {
+        sessionId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+        localStorage.setItem('session_id', sessionId);
+    }
 
-        // Окно авторизации
-        function createLoginPrompt() {
-            const loginPrompt = document.createElement('div');
-            loginPrompt.className = 'login-prompt';
-            loginPrompt.innerHTML = `
-                <button class="close-btn">×</button>
-                <h3>Требуется авторизация</h3>
-                <p>Чтобы оценить видео, необходимо <a href="/login/?next=/video/${compositeId}/">войти</a> или <a href="/register/">зарегистрироваться</a>.</p>
-            `;
-            const backdrop = document.createElement('div');
-            backdrop.className = 'login-prompt-backdrop';
-            document.body.appendChild(loginPrompt);
-            document.body.appendChild(backdrop);
+    function createLoginPrompt() {
+        const loginPrompt = document.createElement('div');
+        loginPrompt.className = 'login-prompt';
+        loginPrompt.innerHTML = `
+            <button class="close-btn">×</button>
+            <h3>Требуется авторизация</h3>
+            <p>Чтобы оценить видео, необходимо <a href="/login/?next=/video/${compositeId}/">войти</a> или <a href="/register/">зарегистрироваться</a>.</p>
+        `;
+        const backdrop = document.createElement('div');
+        backdrop.className = 'login-prompt-backdrop';
+        document.body.appendChild(loginPrompt);
+        document.body.appendChild(backdrop);
 
-            const closeBtn = loginPrompt.querySelector('.close-btn');
-            closeBtn.addEventListener('click', function() {
-                loginPrompt.classList.remove('show');
-                backdrop.classList.remove('show');
-            });
-            backdrop.addEventListener('click', function() {
-                loginPrompt.classList.remove('show');
-                backdrop.classList.remove('show');
-            });
-
-            return { loginPrompt, backdrop };
-        }
-
-        const { loginPrompt, backdrop } = createLoginPrompt();
-
-        function showLoginPrompt() {
-            loginPrompt.classList.add('show');
-            backdrop.classList.add('show');
-        }
-
-        // Получение начального статуса лайка/дизлайка
-        fetch(`/api/video-like-status/${compositeId}/?user_id=${userId}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    isLiked = data.is_liked;
-                    isDisliked = data.is_disliked;
-                    likeButton.classList.toggle('active', isLiked);
-                    dislikeButton.classList.toggle('active', isDisliked);
-                    console.log('Like status loaded:', { isLiked, isDisliked });
-                } else {
-                    console.error('Error fetching like status:', data.error);
-                }
-            })
-            .catch(error => console.error('Error fetching like status:', error));
-
-        // Обработчик лайка
-        likeButton.addEventListener('click', function() {
-            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-            const currentLikes = parseInt(likeCount.textContent);
-            const currentDislikes = parseInt(dislikeCount.textContent);
-            const previousIsLiked = isLiked;
-            const previousIsDisliked = isDisliked;
-
-            // Оптимистическое обновление UI
-            if (isLiked) {
-                isLiked = false;
-                likeButton.classList.remove('active');
-                likeCount.textContent = Math.max(0, currentLikes - 1);
-            } else {
-                isLiked = true;
-                likeButton.classList.add('active');
-                likeCount.textContent = currentLikes + 1;
-                if (isDisliked) {
-                    isDisliked = false;
-                    dislikeButton.classList.remove('active');
-                    dislikeCount.textContent = Math.max(0, currentDislikes - 1);
-                }
-            }
-
-            const formData = new FormData();
-            formData.append('video_id', compositeId);
-            formData.append('user_id', userId);
-
-            fetch('/api/toggle-video-like/', {
-                method: 'POST',
-                headers: { 'X-CSRFToken': csrfToken },
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    likeCount.textContent = data.likes;
-                    dislikeCount.textContent = data.dislikes;
-                    isLiked = data.is_liked;
-                    isDisliked = data.is_disliked;
-                    likeButton.classList.toggle('active', isLiked);
-                    dislikeButton.classList.toggle('active', isDisliked);
-                    console.log('Like toggled:', { likes: data.likes, dislikes: data.dislikes });
-                } else if (data.require_login) {
-                    isLiked = previousIsLiked;
-                    isDisliked = previousIsDisliked;
-                    likeButton.classList.toggle('active', previousIsLiked);
-                    dislikeButton.classList.toggle('active', previousIsDisliked);
-                    likeCount.textContent = currentLikes;
-                    dislikeCount.textContent = currentDislikes;
-                    showLoginPrompt();
-                } else {
-                    console.error('Error toggling like:', data.error);
-                    isLiked = previousIsLiked;
-                    isDisliked = previousIsDisliked;
-                    likeButton.classList.toggle('active', previousIsLiked);
-                    dislikeButton.classList.toggle('active', previousIsDisliked);
-                    likeCount.textContent = currentLikes;
-                    dislikeCount.textContent = currentDislikes;
-                }
-            })
-            .catch(error => {
-                console.error('Error toggling like:', error);
-                isLiked = previousIsLiked;
-                isDisliked = previousIsDisliked;
-                likeButton.classList.toggle('active', previousIsLiked);
-                dislikeButton.classList.toggle('active', previousIsDisliked);
-                likeCount.textContent = currentLikes;
-                dislikeCount.textContent = currentDislikes;
-            });
+        const closeBtn = loginPrompt.querySelector('.close-btn');
+        closeBtn.addEventListener('click', function() {
+            loginPrompt.classList.remove('show');
+            backdrop.classList.remove('show');
+        });
+        backdrop.addEventListener('click', function() {
+            loginPrompt.classList.remove('show');
+            backdrop.classList.remove('show');
         });
 
-        // Обработчик дизлайка
-        dislikeButton.addEventListener('click', function() {
-            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-            const currentLikes = parseInt(likeCount.textContent);
-            const currentDislikes = parseInt(dislikeCount.textContent);
-            const previousIsLiked = isLiked;
-            const previousIsDisliked = isDisliked;
+        return { loginPrompt, backdrop };
+    }
 
-            // Оптимистическое обновление UI
+    const { loginPrompt, backdrop } = createLoginPrompt();
+
+    function showLoginPrompt() {
+        loginPrompt.classList.add('show');
+        backdrop.classList.add('show');
+    }
+
+    fetch(`/api/video-like-status/${compositeId}/?user_id=${userId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                isLiked = data.is_liked;
+                isDisliked = data.is_disliked;
+                likeButton.classList.toggle('active', isLiked);
+                dislikeButton.classList.toggle('active', isDisliked);
+                console.log('Like status loaded:', { isLiked, isDisliked });
+            } else {
+                console.error('Error fetching like status:', data.error);
+            }
+        })
+        .catch(error => console.error('Error fetching like status:', error));
+
+    likeButton.addEventListener('click', function() {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        const currentLikes = parseInt(likeCount.textContent);
+        const currentDislikes = parseInt(dislikeCount.textContent);
+        const previousIsLiked = isLiked;
+        const previousIsDisliked = isDisliked;
+
+        if (isLiked) {
+            isLiked = false;
+            likeButton.classList.remove('active');
+            likeCount.textContent = Math.max(0, currentLikes - 1);
+        } else {
+            isLiked = true;
+            likeButton.classList.add('active');
+            likeCount.textContent = currentLikes + 1;
             if (isDisliked) {
                 isDisliked = false;
                 dislikeButton.classList.remove('active');
                 dislikeCount.textContent = Math.max(0, currentDislikes - 1);
-            } else {
-                isDisliked = true;
-                dislikeButton.classList.add('active');
-                dislikeCount.textContent = currentDislikes + 1;
-                if (isLiked) {
-                    isLiked = false;
-                    likeButton.classList.remove('active');
-                    likeCount.textContent = Math.max(0, currentLikes - 1);
-                }
             }
+        }
 
-            const formData = new FormData();
-            formData.append('video_id', compositeId);
-            formData.append('user_id', userId);
+        const formData = new FormData();
+        formData.append('video_id', compositeId);
+        formData.append('user_id', userId);
 
-            fetch('/api/toggle-video-dislike/', {
-                method: 'POST',
-                headers: { 'X-CSRFToken': csrfToken },
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    likeCount.textContent = data.likes;
-                    dislikeCount.textContent = data.dislikes;
-                    isLiked = data.is_liked;
-                    isDisliked = data.is_disliked;
-                    likeButton.classList.toggle('active', isLiked);
-                    dislikeButton.classList.toggle('active', isDisliked);
-                    console.log('Dislike toggled:', { likes: data.likes, dislikes: data.dislikes });
-                } else if (data.require_login) {
-                    isLiked = previousIsLiked;
-                    isDisliked = previousIsDisliked;
-                    likeButton.classList.toggle('active', previousIsLiked);
-                    dislikeButton.classList.toggle('active', previousIsDisliked);
-                    likeCount.textContent = currentLikes;
-                    dislikeCount.textContent = currentDislikes;
-                    showLoginPrompt();
-                } else {
-                    console.error('Error toggling dislike:', data.error);
-                    isLiked = previousIsLiked;
-                    isDisliked = previousIsDisliked;
-                    likeButton.classList.toggle('active', previousIsLiked);
-                    dislikeButton.classList.toggle('active', previousIsDisliked);
-                    likeCount.textContent = currentLikes;
-                    dislikeCount.textContent = currentDislikes;
-                }
-            })
-            .catch(error => {
-                console.error('Error toggling dislike:', error);
+        fetch('/api/toggle-video-like/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                likeCount.textContent = data.likes;
+                dislikeCount.textContent = data.dislikes;
+                isLiked = data.is_liked;
+                isDisliked = data.is_disliked;
+                likeButton.classList.toggle('active', isLiked);
+                dislikeButton.classList.toggle('active', isDisliked);
+                console.log('Like toggled:', { likes: data.likes, dislikes: data.dislikes });
+            } else if (data.require_login) {
                 isLiked = previousIsLiked;
                 isDisliked = previousIsDisliked;
                 likeButton.classList.toggle('active', previousIsLiked);
                 dislikeButton.classList.toggle('active', previousIsDisliked);
                 likeCount.textContent = currentLikes;
                 dislikeCount.textContent = currentDislikes;
-            });
-        });
-
-        // Отслеживание просмотра (3 секунды)
-        function trackView() {
-            if (viewTracked) {
-                console.log('View already tracked for this session');
-                return;
+                showLoginPrompt();
+            } else {
+                console.error('Error toggling like:', data.error);
+                isLiked = previousIsLiked;
+                isDisliked = previousIsDisliked;
+                likeButton.classList.toggle('active', previousIsLiked);
+                dislikeButton.classList.toggle('active', previousIsLiked);
+                likeCount.textContent = currentLikes;
+                dislikeCount.textContent = currentDislikes;
             }
+        })
+        .catch(error => {
+            console.error('Error toggling like:', error);
+            isLiked = previousIsLiked;
+            isDisliked = previousIsDisliked;
+            likeButton.classList.toggle('active', previousIsLiked);
+            dislikeButton.classList.toggle('active', previousIsDisliked);
+            likeCount.textContent = currentLikes;
+            dislikeCount.textContent = currentDislikes;
+        });
+    });
 
-            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    dislikeButton.addEventListener('click', function() {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        const currentLikes = parseInt(likeCount.textContent);
+        const currentDislikes = parseInt(dislikeCount.textContent);
+        const previousIsLiked = isLiked;
+        const previousIsDisliked = isDisliked;
+
+        if (isDisliked) {
+            isDisliked = false;
+            dislikeButton.classList.remove('active');
+            dislikeCount.textContent = Math.max(0, currentDislikes - 1);
+        } else {
+            isDisliked = true;
+            dislikeButton.classList.add('active');
+            dislikeCount.textContent = currentDislikes + 1;
+            if (isLiked) {
+                isLiked = false;
+                likeButton.classList.remove('active');
+                likeCount.textContent = Math.max(0, currentLikes - 1);
+            }
+        }
+
+        const formData = new FormData();
+        formData.append('video_id', compositeId);
+        formData.append('user_id', userId);
+
+        fetch('/api/toggle-video-dislike/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                likeCount.textContent = data.likes;
+                dislikeCount.textContent = data.dislikes;
+                isLiked = data.is_liked;
+                isDisliked = data.is_disliked;
+                likeButton.classList.toggle('active', isLiked);
+                dislikeButton.classList.toggle('active', isDisliked);
+                console.log('Dislike toggled:', { likes: data.likes, dislikes: data.dislikes });
+            } else if (data.require_login) {
+                isLiked = previousIsLiked;
+                isDisliked = previousIsDisliked;
+                likeButton.classList.toggle('active', previousIsLiked);
+                dislikeButton.classList.toggle('active', previousIsDisliked);
+                likeCount.textContent = currentLikes;
+                dislikeCount.textContent = currentDislikes;
+                showLoginPrompt();
+            } else {
+                console.error('Error toggling dislike:', data.error);
+                isLiked = previousIsLiked;
+                isDisliked = previousIsDisliked;
+                likeButton.classList.toggle('active', previousIsLiked);
+                dislikeButton.classList.toggle('active', previousIsDisliked);
+                likeCount.textContent = currentLikes;
+                dislikeCount.textContent = currentDislikes;
+            }
+        })
+        .catch(error => {
+            console.error('Error toggling dislike:', error);
+            isLiked = previousIsLiked;
+            isDisliked = previousIsDisliked;
+            likeButton.classList.toggle('active', previousIsLiked);
+            dislikeButton.classList.toggle('active', previousIsDisliked);
+            likeCount.textContent = currentLikes;
+            dislikeCount.textContent = currentDislikes;
+        });
+    });
+
+    function trackView() {
+        if (viewTracked) {
+            console.log('View already tracked for this session');
+            return;
+        }
+
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        const formData = new FormData();
+        formData.append('video_id', compositeId);
+        formData.append('user_id', userId);
+        formData.append('session_id', sessionId);
+
+        fetch('/api/track-view/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                viewTracked = true;
+                viewsInfo.textContent = `${data.views} views • ${viewsInfo.textContent.split(' • ')[1]}`;
+                console.log('View tracked:', { views: data.views, view_counted: data.view_counted });
+            } else {
+                console.error('Error tracking view:', data.error);
+            }
+        })
+        .catch(error => console.error('Error tracking view:', error));
+    }
+
+    const subscribeButton = document.querySelector('.subscribe-button');
+    if (subscribeButton) {
+        let isSubscribed = false;
+        
+        subscribeButton.addEventListener('click', function() {
+            {% if not user.is_authenticated %}
+            showLoginPrompt();
+            return;
+            {% endif %}
+            
+            isSubscribed = !isSubscribed;
+            
+            if (isSubscribed) {
+                this.textContent = 'Вы подписаны';
+                this.classList.add('subscribed');
+                this.animate([
+                    { transform: 'scale(0.9)', backgroundColor: 'var(--accent-color)' },
+                    { transform: 'scale(1.1)', backgroundColor: '#333' },
+                    { transform: 'scale(1)', backgroundColor: '#333' }
+                ], {
+                    duration: 300,
+                    easing: 'ease-out',
+                    fill: 'forwards'
+                });
+            } else {
+                this.textContent = 'Подписаться';
+                this.classList.remove('subscribed');
+                this.animate([
+                    { transform: 'scale(0.9)', backgroundColor: '#333' },
+                    { transform: 'scale(1.1)', backgroundColor: 'var(--accent-color)' },
+                    { transform: 'scale(1)', backgroundColor: 'var(--accent-color)' }
+                ], {
+                    duration: 300,
+                    easing: 'ease-out',
+                    fill: 'forwards'
+                });
+            }
+            
+            console.log(`User ${isSubscribed ? 'subscribed to' : 'unsubscribed from'} channel ${video.user_id}`);
+        });
+    }
+
+    videoPlayer.addEventListener('play', function() {
+        if (!watchStartTime) {
+            watchStartTime = Date.now();
+            console.log('Video playback started');
+        }
+    });
+
+    videoPlayer.addEventListener('timeupdate', function() {
+        if (!viewTracked && watchStartTime) {
+            const elapsedTime = (Date.now() - watchStartTime) / 1000;
+            if (elapsedTime >= 3) {
+                trackView();
+                console.log('3 seconds watched, tracking view');
+            }
+        }
+    });
+
+    videoPlayer.addEventListener('pause', function() {
+        console.log('Video paused');
+    });
+
+    videoPlayer.addEventListener('ended', function() {
+        console.log('Video ended');
+    });
+
+    const subscribeBtn = document.querySelector('.subscribe-button');
+    const unsubscribeDialog = document.getElementById('unsubscribe-dialog');
+    const confirmUnsubscribeBtn = document.getElementById('confirm-unsubscribe');
+    const cancelUnsubscribeBtn = document.getElementById('cancel-unsubscribe');
+    const unsubscribeChannelName = document.getElementById('unsubscribe-channel-name');
+    const subscriberCountElem = document.getElementById('subscriber-count');
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    
+    if (subscribeBtn && !subscribeBtn.getAttribute('onclick')) {
+        const channelId = subscribeBtn.getAttribute('data-channel-id');
+        let isSubscribed = false;
+        
+        fetch(`/api/check-subscription/${channelId}/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    isSubscribed = data.is_subscribed;
+                    updateSubscribeButton(isSubscribed);
+                    if (subscriberCountElem && data.subscriber_count !== undefined) {
+                        subscriberCountElem.textContent = data.subscriber_count;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error checking subscription:', error);
+            });
+        
+        subscribeBtn.addEventListener('click', function() {
+            if (isSubscribed) {
+                unsubscribeDialog.classList.add('active');
+                unsubscribeChannelName.textContent = "{{ video.display_name|default:video.channel }}";
+            } else {
+                toggleSubscription('subscribe');
+            }
+        });
+        
+        if (confirmUnsubscribeBtn) {
+            confirmUnsubscribeBtn.addEventListener('click', function() {
+                toggleSubscription('unsubscribe');
+                unsubscribeDialog.classList.remove('active');
+            });
+        }
+        
+        if (cancelUnsubscribeBtn) {
+            cancelUnsubscribeBtn.addEventListener('click', function() {
+                unsubscribeDialog.classList.remove('active');
+            });
+        }
+        
+        if (unsubscribeDialog) {
+            unsubscribeDialog.addEventListener('click', function(e) {
+                if (e.target === unsubscribeDialog) {
+                    unsubscribeDialog.classList.remove('active');
+                }
+            });
+        }
+        
+        function toggleSubscription(action) {
             const formData = new FormData();
-            formData.append('video_id', compositeId);
-            formData.append('user_id', userId);
-            formData.append('session_id', sessionId);
-
-            fetch('/api/track-view/', {
+            formData.append('channel_id', channelId);
+            formData.append('action', action);
+            
+            fetch('/api/toggle-subscription/', {
                 method: 'POST',
-                headers: { 'X-CSRFToken': csrfToken },
+                headers: {
+                    'X-CSRFToken': csrfToken
+                },
                 body: formData
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    viewTracked = true;
-                    viewsInfo.textContent = `${data.views} views • ${viewsInfo.textContent.split(' • ')[1]}`;
-                    console.log('View tracked:', { views: data.views, view_counted: data.view_counted });
-                } else {
-                    console.error('Error tracking view:', data.error);
+                    isSubscribed = data.is_subscribed;
+                    updateSubscribeButton(isSubscribed);
+                    if (subscriberCountElem && data.subscriber_count !== undefined) {
+                        subscriberCountElem.textContent = data.subscriber_count;
+                    }
                 }
             })
-            .catch(error => console.error('Error tracking view:', error));
-        }
-
-        const subscribeButton = document.querySelector('.subscribe-button');
-        if (subscribeButton) {
-            // Check if user is already subscribed (in a real app, this would be from the server)
-            let isSubscribed = false;
-            
-            // Handle subscribe button click
-            subscribeButton.addEventListener('click', function() {
-                // If not authenticated, show login prompt
-                {% if not user.is_authenticated %}
-                showLoginPrompt();
-                return;
-                {% endif %}
-                
-                // Toggle subscription state
-                isSubscribed = !isSubscribed;
-                
-                if (isSubscribed) {
-                    this.textContent = 'Вы подписаны';
-                    this.classList.add('subscribed');
-                    // Add subscription animation
-                    this.animate([
-                        { transform: 'scale(0.9)', backgroundColor: 'var(--accent-color)' },
-                        { transform: 'scale(1.1)', backgroundColor: '#333' },
-                        { transform: 'scale(1)', backgroundColor: '#333' }
-                    ], {
-                        duration: 300,
-                        easing: 'ease-out',
-                        fill: 'forwards'
-                    });
-                } else {
-                    this.textContent = 'Подписаться';
-                    this.classList.remove('subscribed');
-                    // Add unsubscribe animation
-                    this.animate([
-                        { transform: 'scale(0.9)', backgroundColor: '#333' },
-                        { transform: 'scale(1.1)', backgroundColor: 'var(--accent-color)' },
-                        { transform: 'scale(1)', backgroundColor: 'var(--accent-color)' }
-                    ], {
-                        duration: 300,
-                        easing: 'ease-out',
-                        fill: 'forwards'
-                    });
-                }
-                
-                // In a real implementation, you would send this to the server
-                console.log(`User ${isSubscribed ? 'subscribed to' : 'unsubscribed from'} channel ${video.user_id}`);
+            .catch(error => {
+                console.error('Error toggling subscription:', error);
             });
         }
-
-        // Отслеживание времени просмотра
-        videoPlayer.addEventListener('play', function() {
-            if (!watchStartTime) {
-                watchStartTime = Date.now();
-                console.log('Video playback started');
+        
+        function updateSubscribeButton(isSubscribed) {
+            if (isSubscribed) {
+                subscribeBtn.textContent = 'Вы подписаны';
+                subscribeBtn.classList.add('subscribed');
+            } else {
+                subscribeBtn.textContent = 'Подписаться';
+                subscribeBtn.classList.remove('subscribed');
             }
-        });
-
-        videoPlayer.addEventListener('timeupdate', function() {
-            if (!viewTracked && watchStartTime) {
-                const elapsedTime = (Date.now() - watchStartTime) / 1000; // В секундах
-                if (elapsedTime >= 3) {
-                    trackView();
-                    console.log('3 seconds watched, tracking view');
-                }
-            }
-        });
-
-        videoPlayer.addEventListener('pause', function() {
-            console.log('Video paused');
-        });
-
-        videoPlayer.addEventListener('ended', function() {
-            console.log('Video ended');
-        });
-    });
+        }
+    }
+});
 </script>
 {% endblock %}

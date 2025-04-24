@@ -40,9 +40,9 @@
             <div class="video-info">
                 <div class="video-title">{{ video.title }}</div>
                 <div class="channel-info">
-                    <a href="{% url 'channel' username=video.user_id %}" class="channel-avatar-small">
+                    <a href="{% url 'channel' username=video.user_id %}" class="avatar avatar-small">
                         {% if video.avatar_url %}
-                            <img src="{{ video.avatar_url }}" alt="{{ video.display_name|default:video.channel }}">
+                            <img src="{{ video.avatar_url }}" alt="{{ video.display_name|default:video.channel }}" loading="lazy">
                         {% else %}
                             <span class="avatar-text">{{ video.display_name|first|default:video.channel|first }}</span>
                         {% endif %}
@@ -59,58 +59,8 @@
     {% endif %}
 </div>
 
-{% endblock %}
 <style>
-/* Enhanced channel info styles */
-.channel-info {
-    display: flex;
-    align-items: center;
-    margin: 8px 0;
-}
-
-.channel-avatar-small {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    margin-right: 8px;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: rgba(159, 37, 88, 0.1);
-    flex-shrink: 0;
-}
-
-.channel-avatar-small img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.channel-avatar-small .avatar-text {
-    font-size: 12px;
-    font-weight: bold;
-    color: var(--primary-color);
-}
-
-.channel-name {
-    font-size: 14px;
-    color: rgba(159, 37, 88, 0.7) !important; /* Soft pink color for author name */
-    text-decoration: none;
-    font-weight: 500;
-    transition: color 0.2s;
-}
-
-.dark-theme .channel-name {
-    color: rgba(255, 176, 201, 0.9) !important; /* Lighter pink for dark theme */
-}
-
-.channel-name:hover {
-    color: var(--primary-color) !important;
-    text-decoration: underline;
-}
-
-/* Enhanced video card styles */
+/* Video card styles */
 .videos-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -154,6 +104,30 @@
     transform: scale(1.05);
 }
 
+/* Channel info styles */
+.channel-info {
+    display: flex;
+    align-items: center;
+    margin: 8px 0;
+}
+
+.channel-name {
+    font-size: 14px;
+    color: rgba(159, 37, 88, 0.7);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s;
+}
+
+.dark-theme .channel-name {
+    color: rgba(255, 176, 201, 0.9);
+}
+
+.channel-name:hover {
+    color: var(--primary-color);
+    text-decoration: underline;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .videos-grid {
@@ -168,16 +142,16 @@
     }
 }
 </style>
+{% endblock %}
+
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Инициализация ленивой загрузки миниатюр для видео без URL миниатюр
     const lazyThumbnails = document.querySelectorAll('.lazy-load-thumbnail');
     
     if (lazyThumbnails.length > 0) {
         console.log(`Initializing lazy loading for ${lazyThumbnails.length} thumbnails`);
         
-        // Если есть браузерная поддержка для IntersectionObserver, используем ее
         if ('IntersectionObserver' in window) {
             const imageObserver = new IntersectionObserver((entries) => {
                 entries.forEach(entry => {
@@ -187,26 +161,18 @@ document.addEventListener('DOMContentLoaded', function() {
                         const userId = img.getAttribute('data-user-id');
                         
                         if (videoId && userId) {
-                            // Пытаемся сначала получить URL из sessionStorage
                             const cachedUrl = sessionStorage.getItem(`thumbnail_${userId}__${videoId}`);
                             
                             if (cachedUrl) {
-                                // Используем кэшированный URL
                                 img.src = cachedUrl;
                                 imageObserver.unobserve(img);
                             } else {
-                                // Запрашиваем URL миниатюры у сервера
                                 fetch(`/api/get-thumbnail-url/${userId}__${videoId}/`)
                                     .then(response => response.json())
                                     .then(data => {
                                         if (data.success && data.url) {
-                                            // Кэшируем URL для повторного использования
                                             sessionStorage.setItem(`thumbnail_${userId}__${videoId}`, data.url);
-                                            
-                                            // Устанавливаем URL в изображение
                                             img.src = data.url;
-                                            
-                                            // Прекращаем наблюдение за этим элементом
                                             imageObserver.unobserve(img);
                                         }
                                     })
@@ -218,16 +184,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 });
             }, {
-                rootMargin: '200px 0px',  // Подгружаем, когда элемент находится в 200px от видимой области
+                rootMargin: '200px 0px',
                 threshold: 0.01
             });
             
-            // Добавляем все изображения для наблюдения
             lazyThumbnails.forEach(img => {
                 imageObserver.observe(img);
             });
         } else {
-            // Если IntersectionObserver не поддерживается, загружаем при прокрутке
             function lazyLoad() {
                 const scrollTop = window.pageYOffset;
                 const viewportHeight = window.innerHeight;
@@ -235,29 +199,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 lazyThumbnails.forEach(img => {
                     const rect = img.getBoundingClientRect();
                     
-                    // Если изображение близко к видимой области
                     if (rect.top <= viewportHeight + 200) {
                         const videoId = img.getAttribute('data-video-id');
                         const userId = img.getAttribute('data-user-id');
                         
                         if (videoId && userId) {
-                            // Пытаемся сначала получить URL из sessionStorage
                             const cachedUrl = sessionStorage.getItem(`thumbnail_${userId}__${videoId}`);
                             
                             if (cachedUrl) {
-                                // Используем кэшированный URL
                                 img.src = cachedUrl;
                                 img.classList.remove('lazy-load-thumbnail');
                             } else {
-                                // Запрашиваем URL миниатюры у сервера
                                 fetch(`/api/get-thumbnail-url/${userId}__${videoId}/`)
                                     .then(response => response.json())
                                     .then(data => {
                                         if (data.success && data.url) {
-                                            // Кэшируем URL для повторного использования
                                             sessionStorage.setItem(`thumbnail_${userId}__${videoId}`, data.url);
-                                            
-                                            // Устанавливаем URL в изображение
                                             img.src = data.url;
                                             img.classList.remove('lazy-load-thumbnail');
                                         }
@@ -271,7 +228,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             }
             
-            // Вызываем загрузку первоначально и при прокрутке
             lazyLoad();
             window.addEventListener('scroll', function() {
                 lazyLoad();

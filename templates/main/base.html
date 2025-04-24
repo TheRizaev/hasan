@@ -169,9 +169,14 @@
                 <div class="menu-icon"><img src="/static/icons/books.svg" alt="Dark mode" width="32" height="32"></div>
                 <div class="menu-text">Библиотека</div>
             </div>
-            <div class="menu-item">
-                <div class="menu-icon"><img src="/static/icons/tip.svg" alt="Dark mode" width="32" height="32"></div>
-                <div class="menu-text">Подписки</div>
+            <div class="menu-item subscriptions-toggle" id="subscriptions-toggle">
+                <div class="menu-icon"><img src="/static/icons/tip.svg" alt="Подписки" width="24" height="24"></div>
+                <div class="menu-text">Подписки{% if subscription_count %} ({{ subscription_count }}){% endif %}</div>
+                <div class="toggle-icon">▶</div>
+            </div>
+            <div class="subscriptions-list" id="subscriptions-list">
+                <!-- Subscriptions will be loaded here -->
+                <div class="subscription-loading">Загрузка подписок...</div>
             </div>
             
             {% if user.is_authenticated %}
@@ -228,7 +233,131 @@
     {% block scripts %}{% endblock %}
 </body>
 </html>
+<style>
+/* Subscriptions menu styles */
+.subscriptions-toggle {
+    position: relative;
+}
 
+.toggle-icon {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%) rotate(0deg);
+    transition: transform 0.3s ease;
+    font-size: 10px;
+    color: var(--gray-color);
+}
+
+.subscriptions-toggle.active .toggle-icon {
+    transform: translateY(-50%) rotate(90deg);
+}
+
+.subscriptions-list {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.5s ease;
+    padding-left: 10px;
+}
+
+.subscriptions-list.show {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.subscription-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 15px;
+    margin: 5px 0;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.3s;
+}
+
+.subscription-item:hover {
+    background-color: rgba(159, 37, 88, 0.1);
+}
+
+.dark-theme .subscription-item:hover {
+    background-color: rgba(159, 37, 88, 0.2);
+}
+
+.subscription-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background-color: var(--accent-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: 12px;
+    margin-right: 10px;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.subscription-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.subscription-name {
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-dark);
+}
+
+.dark-theme .subscription-name {
+    color: var(--text-light);
+}
+
+.subscription-loading {
+    padding: 10px 15px;
+    color: var(--gray-color);
+    font-size: 13px;
+    font-style: italic;
+}
+
+.no-subscriptions {
+    padding: 10px 15px;
+    color: var(--gray-color);
+    font-size: 13px;
+    text-align: center;
+}
+
+/* Add animation for subscription items */
+@keyframes fadeInLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.subscription-item {
+    animation: fadeInLeft 0.3s ease forwards;
+    opacity: 0;
+}
+
+.subscription-item:nth-child(2) { animation-delay: 0.05s; }
+.subscription-item:nth-child(3) { animation-delay: 0.1s; }
+.subscription-item:nth-child(4) { animation-delay: 0.15s; }
+.subscription-item:nth-child(5) { animation-delay: 0.2s; }
+.subscription-item:nth-child(6) { animation-delay: 0.25s; }
+.subscription-item:nth-child(7) { animation-delay: 0.3s; }
+.subscription-item:nth-child(8) { animation-delay: 0.35s; }
+.subscription-item:nth-child(9) { animation-delay: 0.4s; }
+.subscription-item:nth-child(10) { animation-delay: 0.45s; }
+</style>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const notificationButton = document.querySelector('.notification-icon');
@@ -249,5 +378,81 @@
                 }
             });
         }
+        const subscriptionsToggle = document.getElementById('subscriptions-toggle');
+    const subscriptionsList = document.getElementById('subscriptions-list');
+    
+    // Only initialize if elements exist and user is authenticated
+    if (subscriptionsToggle && subscriptionsList {% if user.is_authenticated %} && true {% else %} && false {% endif %}) {
+        let subscriptionsLoaded = false;
+        
+        // Toggle subscriptions list
+        subscriptionsToggle.addEventListener('click', function() {
+            subscriptionsToggle.classList.toggle('active');
+            subscriptionsList.classList.toggle('show');
+            
+            // Load subscriptions if not loaded yet
+            if (!subscriptionsLoaded) {
+                loadSubscriptions();
+                subscriptionsLoaded = true;
+            }
+        });
+        
+        // Function to load subscriptions
+        function loadSubscriptions() {
+            fetch('/api/get-subscriptions/')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.subscriptions) {
+                        renderSubscriptions(data.subscriptions);
+                    } else {
+                        showNoSubscriptions();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading subscriptions:', error);
+                    showNoSubscriptions();
+                });
+        }
+        
+        // Function to render subscriptions
+        function renderSubscriptions(subscriptions) {
+            subscriptionsList.innerHTML = '';
+            
+            if (subscriptions.length === 0) {
+                showNoSubscriptions();
+                return;
+            }
+            
+            subscriptions.forEach(subscription => {
+                const item = document.createElement('div');
+                item.className = 'subscription-item';
+                item.onclick = function() {
+                    window.location.href = `/channel/${subscription.channel_id}/`;
+                };
+                
+                // Determine avatar content
+                let avatarContent = '';
+                if (subscription.avatar_url) {
+                    avatarContent = `<img src="${subscription.avatar_url}" alt="${subscription.display_name}">`;
+                } else {
+                    avatarContent = subscription.display_name.charAt(0);
+                }
+                
+                item.innerHTML = `
+                    <div class="subscription-avatar">${avatarContent}</div>
+                    <div class="subscription-name">${subscription.display_name}</div>
+                `;
+                
+                subscriptionsList.appendChild(item);
+            });
+        }
+        
+        // Function to show no subscriptions message
+        function showNoSubscriptions() {
+            subscriptionsList.innerHTML = `
+                <div class="no-subscriptions">У вас пока нет подписок</div>
+            `;
+        }
+    }
     });
 </script>

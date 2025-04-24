@@ -39,6 +39,10 @@ urlpatterns = [
     path('api/toggle-video-like/', views.toggle_video_like, name='toggle_video_like'),
     path('api/toggle-video-dislike/', views.toggle_video_dislike, name='toggle_video_dislike'),
     path('api/video-like-status/<str:video_id>/', views.get_video_like_status, name='get_video_like_status'),
+    
+    path('api/toggle-subscription/', views.toggle_subscription, name='toggle_subscription'),
+    path('api/check-subscription/<str:channel_id>/', views.check_subscription, name='check_subscription'),
+    path('api/get-subscriptions/', views.get_subscriptions, name='get_subscriptions'),
 ]
 
 if settings.DEBUG:

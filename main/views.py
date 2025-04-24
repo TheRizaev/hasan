@@ -1,6 +1,6 @@
 
 from django.shortcuts import render, redirect
-from .models import VideoLike, Category
+from .models import VideoLike, Category, Subscription
 import random
 from .gcs_storage import get_video_metadata, get_bucket
 from django.db import transaction
@@ -8,6 +8,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.shortcuts import redirect
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_http_methods
 from .forms import (
     UserRegistrationForm, UserLoginForm, UserProfileForm, 
     AuthorApplicationForm, EmailVerificationForm, DisplayNameForm
@@ -1066,9 +1067,154 @@ def profile_settings_view(request):
     
     return render(request, 'accounts/profile_settings.html', {'form': form})
 
+@login_required
+@require_http_methods(["POST"])
+def toggle_subscription(request):
+    """
+    API endpoint to toggle subscription to a channel
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid method'}, status=405)
+
+    try:
+        channel_id = request.POST.get('channel_id')
+        action = request.POST.get('action', 'toggle')  # toggle, subscribe, unsubscribe
+
+        if not channel_id:
+            return JsonResponse({'success': False, 'error': 'Missing channel_id'}, status=400)
+
+        # Check if subscription exists
+        subscription_exists = Subscription.objects.filter(
+            subscriber=request.user,
+            channel_id=channel_id
+        ).exists()
+
+        # Determine action based on current state and requested action
+        if action == 'toggle':
+            if subscription_exists:
+                # Unsubscribe
+                Subscription.objects.filter(
+                    subscriber=request.user,
+                    channel_id=channel_id
+                ).delete()
+                is_subscribed = False
+            else:
+                # Subscribe
+                Subscription.objects.create(
+                    subscriber=request.user,
+                    channel_id=channel_id
+                )
+                is_subscribed = True
+        elif action == 'subscribe' and not subscription_exists:
+            # Subscribe only if not already subscribed
+            Subscription.objects.create(
+                subscriber=request.user,
+                channel_id=channel_id
+            )
+            is_subscribed = True
+        elif action == 'unsubscribe' and subscription_exists:
+            # Unsubscribe only if currently subscribed
+            Subscription.objects.filter(
+                subscriber=request.user,
+                channel_id=channel_id
+            ).delete()
+            is_subscribed = False
+        else:
+            # No change needed
+            is_subscribed = subscription_exists
+
+        # Get subscriber count for this channel
+        subscriber_count = Subscription.objects.filter(channel_id=channel_id).count()
+
+        return JsonResponse({
+            'success': True,
+            'is_subscribed': is_subscribed,
+            'subscriber_count': subscriber_count
+        })
+
+    except Exception as e:
+        logger.error(f"Error toggling subscription: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@login_required
+def check_subscription(request, channel_id):
+    """
+    API endpoint to check if user is subscribed to a channel
+    """
+    try:
+        is_subscribed = Subscription.objects.filter(
+            subscriber=request.user,
+            channel_id=channel_id
+        ).exists()
+        
+        # Get subscriber count for this channel
+        subscriber_count = Subscription.objects.filter(channel_id=channel_id).count()
+        
+        return JsonResponse({
+            'success': True,
+            'is_subscribed': is_subscribed,
+            'subscriber_count': subscriber_count
+        })
+    except Exception as e:
+        logger.error(f"Error checking subscription: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@login_required
+def get_subscriptions(request):
+    """
+    API endpoint to get user's subscriptions
+    """
+    try:
+        subscriptions = Subscription.objects.filter(subscriber=request.user).order_by('-subscribed_at')
+        
+        # Collect channel_ids to fetch profiles from GCS
+        channel_ids = [sub.channel_id for sub in subscriptions]
+        
+        # Prepare subscription data with available info
+        subscription_data = []
+        from .gcs_storage import get_user_profile_from_gcs
+        
+        for channel_id in channel_ids:
+            try:
+                # Try to get channel profile from GCS
+                channel_profile = get_user_profile_from_gcs(channel_id)
+                
+                if channel_profile:
+                    subscription_data.append({
+                        'channel_id': channel_id,
+                        'display_name': channel_profile.get('display_name', channel_id.replace('@', '')),
+                        'avatar_url': channel_profile.get('avatar_url', ''),
+                        'subscriber_count': Subscription.objects.filter(channel_id=channel_id).count()
+                    })
+                else:
+                    # Fallback if profile not found
+                    subscription_data.append({
+                        'channel_id': channel_id,
+                        'display_name': channel_id.replace('@', ''),
+                        'avatar_url': '',
+                        'subscriber_count': Subscription.objects.filter(channel_id=channel_id).count()
+                    })
+            except Exception as profile_error:
+                logger.error(f"Error fetching profile for {channel_id}: {profile_error}")
+                # Add with minimal information
+                subscription_data.append({
+                    'channel_id': channel_id,
+                    'display_name': channel_id.replace('@', ''),
+                    'avatar_url': '',
+                    'subscriber_count': Subscription.objects.filter(channel_id=channel_id).count()
+                })
+        
+        return JsonResponse({
+            'success': True,
+            'subscriptions': subscription_data
+        })
+    except Exception as e:
+        logger.error(f"Error getting subscriptions: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
 def base_context_processor(request):
     """
-    Context processor for adding profile information for base.html
+    Context processor for adding profile information and subscription count for base.html
     Register this in settings.py in TEMPLATES['OPTIONS']['context_processors']
     """
     context = {}
@@ -1081,8 +1227,9 @@ def base_context_processor(request):
             
             if gcs_profile and 'avatar_url' in gcs_profile:
                 context['user_avatar_url'] = gcs_profile['avatar_url']
+                
+            context['subscription_count'] = Subscription.objects.filter(subscriber=request.user).count()
         except Exception as e:
-            # Log error but don't break the page
             logger.error(f"Error loading user profile for context: {e}")
     
     return context

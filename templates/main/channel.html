@@ -31,7 +31,7 @@
                 <h1 class="channel-title">{{ channel.display_name|default:channel.user_id }}</h1>
                 <div class="channel-stats">
                     <span class="channel-username">{{ channel.user_id }}</span>
-                    <span class="channel-subscribers">{{ channel.stats.subscribers|default:"0" }} подписчиков</span>
+                    <span class="channel-subscribers"><span id="subscriber-count">{{ channel.stats.subscribers|default:"0" }}</span> подписчиков</span>
                     <span class="channel-videos-count">{{ channel.stats.videos_count|default:"0" }} видео</span>
                 </div>
                 {% if channel.bio %}
@@ -43,7 +43,7 @@
             
             <div class="channel-actions">
                 {% if user.is_authenticated and user.username != channel.user_id %}
-                <button class="subscribe-button">Подписаться</button>
+                <button class="subscribe-button" data-channel-id="{{ channel.user_id }}">Подписаться</button>
                 {% elif user.is_authenticated and user.username == channel.user_id %}
                 <button class="edit-channel-button" onclick="window.location.href='{% url 'profile_settings' %}'">Настройки канала</button>
                 {% else %}
@@ -103,6 +103,18 @@
             <button id="load-more-btn" class="load-more-button">Загрузить ещё</button>
         </div>
         {% endif %}
+    </div>
+</div>
+
+<!-- Confirmation Dialog for Unsubscribe -->
+<div class="unsubscribe-dialog" id="unsubscribe-dialog">
+    <div class="unsubscribe-dialog-content">
+        <h3>Отписаться от канала</h3>
+        <p>Вы точно хотите отписаться от автора <strong id="unsubscribe-channel-name">{{ channel.display_name|default:channel.user_id }}</strong>?</p>
+        <div class="unsubscribe-dialog-buttons">
+            <button id="confirm-unsubscribe" class="confirm-unsubscribe-btn">Отписаться</button>
+            <button id="cancel-unsubscribe" class="cancel-unsubscribe-btn">Отмена</button>
+        </div>
     </div>
 </div>
 
@@ -271,6 +283,10 @@
     box-shadow: 0 8px 20px rgba(159, 37, 88, 0.4);
 }
 
+.subscribe-button.subscribed {
+    background-color: #333;
+}
+
 .edit-channel-button {
     background-color: transparent;
     color: var(--primary-color);
@@ -402,6 +418,94 @@
     box-shadow: 0 5px 15px rgba(159, 37, 88, 0.3);
 }
 
+/* Unsubscribe dialog */
+.unsubscribe-dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.unsubscribe-dialog.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.unsubscribe-dialog-content {
+    background-color: var(--light-bg);
+    border-radius: 15px;
+    padding: 25px;
+    max-width: 90%;
+    width: 450px;
+    text-align: center;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.dark-theme .unsubscribe-dialog-content {
+    background-color: var(--medium-bg);
+}
+
+.unsubscribe-dialog h3 {
+    color: var(--primary-color);
+    margin-bottom: 15px;
+}
+
+.unsubscribe-dialog p {
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+
+.unsubscribe-dialog-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+}
+
+.confirm-unsubscribe-btn, .cancel-unsubscribe-btn {
+    padding: 10px 20px;
+    border-radius: 30px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.confirm-unsubscribe-btn {
+    background-color: #ff4757;
+    color: white;
+    border: none;
+    box-shadow: 0 3px 10px rgba(255, 71, 87, 0.3);
+}
+
+.confirm-unsubscribe-btn:hover {
+    background-color: #e3263c;
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(255, 71, 87, 0.4);
+}
+
+.cancel-unsubscribe-btn {
+    background-color: transparent;
+    color: var(--text-dark);
+    border: 2px solid var(--gray-color);
+}
+
+.dark-theme .cancel-unsubscribe-btn {
+    color: var(--text-light);
+}
+
+.cancel-unsubscribe-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    transform: translateY(-3px);
+}
+
 /* Responsive adaptations */
 @media (max-width: 768px) {
     .channel-header-content {
@@ -443,6 +547,9 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // CSRF Token for AJAX requests
+    const csrfToken = '{{ csrf_token }}';
+    
     // Handle navigation tabs
     const navItems = document.querySelectorAll('.channel-navigation-item');
     
@@ -536,27 +643,112 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Handle subscribe button
+    // Handle subscription button
     const subscribeBtn = document.querySelector('.subscribe-button');
+    const unsubscribeDialog = document.getElementById('unsubscribe-dialog');
+    const confirmUnsubscribeBtn = document.getElementById('confirm-unsubscribe');
+    const cancelUnsubscribeBtn = document.getElementById('cancel-unsubscribe');
+    const unsubscribeChannelName = document.getElementById('unsubscribe-channel-name');
+    const subscriberCountElem = document.getElementById('subscriber-count');
+    
     if (subscribeBtn && !subscribeBtn.getAttribute('onclick')) {
+        const channelId = subscribeBtn.getAttribute('data-channel-id');
+        let isSubscribed = false;
+        
+        // Check initial subscription status
+        fetch(`/api/check-subscription/${channelId}/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    isSubscribed = data.is_subscribed;
+                    updateSubscribeButton(isSubscribed);
+                    
+                    // Update subscriber count
+                    if (subscriberCountElem && data.subscriber_count !== undefined) {
+                        subscriberCountElem.textContent = data.subscriber_count;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error checking subscription:', error);
+            });
+        
+        // Handle subscribe button click
         subscribeBtn.addEventListener('click', function() {
-            // Toggle subscription state
-            const isSubscribed = this.classList.contains('subscribed');
-            
             if (isSubscribed) {
-                this.classList.remove('subscribed');
-                this.textContent = 'Подписаться';
-                this.style.backgroundColor = '';
+                // Show confirmation dialog for unsubscribe
+                unsubscribeDialog.classList.add('active');
+                unsubscribeChannelName.textContent = "{{ channel.display_name|default:channel.user_id }}";
             } else {
-                this.classList.add('subscribed');
-                this.textContent = 'Вы подписаны';
-                this.style.backgroundColor = '#333';
+                // Subscribe directly
+                toggleSubscription('subscribe');
             }
-            
-            // In a real implementation, you would send an API request here
-            console.log(`Subscription ${isSubscribed ? 'removed' : 'added'}`);
         });
+        
+        // Handle confirm unsubscribe button
+        if (confirmUnsubscribeBtn) {
+            confirmUnsubscribeBtn.addEventListener('click', function() {
+                toggleSubscription('unsubscribe');
+                unsubscribeDialog.classList.remove('active');
+            });
+        }
+        
+        // Handle cancel unsubscribe button
+        if (cancelUnsubscribeBtn) {
+            cancelUnsubscribeBtn.addEventListener('click', function() {
+                unsubscribeDialog.classList.remove('active');
+            });
+        }
+        
+        // Close dialog when clicking outside
+        unsubscribeDialog.addEventListener('click', function(e) {
+            if (e.target === unsubscribeDialog) {
+                unsubscribeDialog.classList.remove('active');
+            }
+        });
+        
+        // Toggle subscription function
+        function toggleSubscription(action) {
+            const formData = new FormData();
+            formData.append('channel_id', channelId);
+            formData.append('action', action);
+            
+            fetch('/api/toggle-subscription/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                },
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    isSubscribed = data.is_subscribed;
+                    updateSubscribeButton(isSubscribed);
+                    
+                    // Update subscriber count
+                    if (subscriberCountElem && data.subscriber_count !== undefined) {
+                        subscriberCountElem.textContent = data.subscriber_count;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error toggling subscription:', error);
+            });
+        }
+        
+        // Update subscribe button appearance
+        function updateSubscribeButton(isSubscribed) {
+            if (isSubscribed) {
+                subscribeBtn.textContent = 'Вы подписаны';
+                subscribeBtn.classList.add('subscribed');
+            } else {
+                subscribeBtn.textContent = 'Подписаться';
+                subscribeBtn.classList.remove('subscribed');
+            }
+        }
     }
 });
 </script>
+
 {% endblock %}

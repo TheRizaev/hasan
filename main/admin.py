@@ -1,6 +1,6 @@
 # В main/admin.py
 from django.contrib import admin
-from .models import Category, Channel, Video, UserProfile, ExpertiseArea
+from .models import Category, Channel, Video, UserProfile, ExpertiseArea, Subscription
 
 class UserProfileAdmin(admin.ModelAdmin):
     list_display = ('user', 'is_author', 'author_application_pending', 'date_joined')
@@ -26,8 +26,15 @@ class UserProfileAdmin(admin.ModelAdmin):
         self.message_user(request, f"{queryset.count()} заявок на авторство отклонено")
     reject_author.short_description = "Отклонить выбранные заявки на авторство"
 
+class SubscriptionAdmin(admin.ModelAdmin):
+    list_display = ('subscriber', 'channel_id', 'subscribed_at')
+    list_filter = ('subscribed_at',)
+    search_fields = ('subscriber__username', 'channel_id')
+    date_hierarchy = 'subscribed_at'
+
 admin.site.register(UserProfile, UserProfileAdmin)
 admin.site.register(ExpertiseArea)
 admin.site.register(Category)
 admin.site.register(Channel)
 admin.site.register(Video)
+admin.site.register(Subscription, SubscriptionAdmin)
